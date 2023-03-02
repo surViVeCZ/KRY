@@ -42,8 +42,18 @@ char *decode(int a, int b, char *text) {
             x = text[i] - 'A';
         } else if (text[i] >= 'a' && text[i] <= 'z') {
             x = text[i] - 'a';
+        }else if (text[i] == ' '){
+            decoded[i] = ' ';
+            continue;
         }
-        char decoded_char = (MI * (x - b)) % 26 + 'A';
+
+
+        // printf("%c:%d ", text[i],x);
+        char decoded_char = (MI * (x - b) % 26);
+        if (decoded_char < 0){
+            decoded_char = decoded_char + 26;
+        }
+        decoded_char = decoded_char + 'A'; 
         if(text[i] == ' '){
             decoded[i] = ' ';
             continue;

@@ -63,9 +63,30 @@ char *decode(int a, int b, char *text) {
     return decoded;
 }
 
+//function for frequency analysis, prints out the frequency of each character in the text
+void frequency(char *s){
+    int count[26] = {0};
+    int i = 0;
+    while(s[i] != '\0'){
+        if(s[i] >= 'A' && s[i] <= 'Z'){
+            count[s[i] - 'A']++;
+        }
+        i++;
+    }
+    for(int i = 0; i < 26; i++){
+        if(count[i] != 0){
+            printf("%c:%d ", i + 'A', count[i]);
+        }
+    }
+
+    
+}
 
 char *nokey_decode(int a, int b, char *text) {
     printf("Decoding without key with a=%d and b=%d, with text %s\n", a, b, text);
+
+
+    frequency(text);
     return text;
 }
 

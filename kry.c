@@ -65,6 +65,7 @@ char *decode(int a, int b, char *text) {
 
 //function for frequency analysis, prints out the frequency of each character in the text
 void frequency(char *s){
+    //sort it from highest count to lowest
     int count[26] = {0};
     int i = 0;
     while(s[i] != '\0'){
@@ -74,17 +75,16 @@ void frequency(char *s){
         i++;
     }
     for(int i = 0; i < 26; i++){
-        if(count[i] != 0){
-            printf("%c:%d ", i + 'A', count[i]);
-        }
+        printf("%c:%d ", i + 'A', count[i]);
     }
-
-    
 }
 
 char *nokey_decode(int a, int b, char *text) {
     printf("Decoding without key with a=%d and b=%d, with text %s\n", a, b, text);
+    char *czech_frequency = "EAONITSRLKVPMUDJYZHCBGF";
 
+    char alphabet[26] = {'A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'J', 'K', 'L', 'M',
+                         'N', 'O', 'P', 'Q', 'R', 'S', 'T', 'U', 'V', 'W', 'X', 'Y', 'Z'};
 
     frequency(text);
     return text;

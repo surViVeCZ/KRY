@@ -1,34 +1,33 @@
-#ifndef CZECH_FREQUENCY_H
-#define CZECH_FREQUENCY_H
+#ifndef CZECH_ALPHABET_H
+#define CZECH_ALPHABET_H
 
-// frequencies of each character in Czech alphabet
-const double czech_frequencies[] = {
-    0.102,  // a, á
-    0.039,  // b
-    0.061,  // c, č
-    0.024,  // d, ď
-    0.093,  // e, é, ě
-    0.017,  // f
-    0.028,  // g
-    0.024,  // h, ch
-    0.007,  // i, í
-    0.001,  // j
-    0.027,  // k
-    0.042,  // l
-    0.028,  // m
-    0.057,  // n, ň
-    0.057,  // o
-    0.022,  // p
-    0.001,  // q
-    0.051,  // r, ř
-    0.053,  // s, š
-    0.062,  // t, ť
-    0.025,  // u, ú
-    0.007,  // v
-    0.010,  // w
-    0.014,  // x
-    0.023,  // y, ý
-    0.001   // z, ž
+static const float CZECH_ALPHABET_FREQ[] = {
+    0.115,   // a
+    0.0187,  // b
+    0.0187,  // c
+    0.0125,  // d
+    0.1975,  // e
+    0.0094,  // f
+    0.0242,  // g
+    0.0242,  // h
+    0.0911,  // i
+    0.0019,  // j
+    0.0405,  // k
+    0.0361,  // l
+    0.0345,  // m
+    0.1045,  // n
+    0.0582,  // o
+    0.0405,  // p
+    0.0002,  // q
+    0.0563,  // r
+    0.0497,  // s
+    0.0626,  // t
+    0.0304,  // u
+    0.013,   // v
+    0.0006,  // w
+    0.0193,  // x
+    0.0016,  // y
+    0.0214,  // z
 };
 
-#endif // CZECH_FREQUENCY_H
+#endif  // CZECH_ALPHABET_H

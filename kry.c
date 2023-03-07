@@ -1,6 +1,7 @@
 #include <stdio.h>
 #include <string.h>
 #include <stdlib.h>
+#include <math.h>
 #include "freq.h"
 
 #define ALPHABET_SIZE 26
@@ -80,21 +81,21 @@ char *decode(int a, int b, char *text) {
 
 //function for frequency analysis, prints out the frequency of each character in the text
 float *frequency(char *s){
-    //sort it from highest count to lowest
-    float encoded_freq[ALPHABET_SIZE] = {0};
+    float *freq = malloc(ALPHABET_SIZE * sizeof(float));
     int i = 0;
-    float len = strlen(s);
-    while(s[i] != '\0'){
-        if(s[i] >= 'A' && s[i] <= 'Z'){
-            encoded_freq[s[i] - 'A']++;
+    int j = 0;
+    int count = 0;
+    int len = strlen(s);
+    for(i = 0; i < ALPHABET_SIZE; i++){
+        for(j = 0; j < len; j++){
+            if(s[j] == 'a' + i || s[j] == 'A' + i){
+                count++;
+            }
         }
-        i++;
+        freq[i] = (float)count / len;
+        count = 0;
     }
-    for(int i = 0; i < ALPHABET_SIZE; i++){
-        encoded_freq[i] /= len;
-        //printf("%c:%f \n", i + 'A', encoded_freq[i]);
-    }
-    return encoded_freq;
+    return freq;
 }
 
 //get error from frequency analysis of input and frequency analysis of decoded_text
@@ -112,6 +113,7 @@ float get_error(char *input_freq, char *decoded_freq){
 char *nokey_decode(char *input, char *output) {
     FILE *input_fp, *output_fp;
     char encoded_text[255];
+    char *decoded_text = NULL;
 
     input_fp = fopen(input, "r");
     output_fp = fopen(output, "w");
@@ -134,7 +136,7 @@ char *nokey_decode(char *input, char *output) {
 
     int a_key[12] = {1,3,5,7,9,11,15,17,19,21,23,25};
     int b_key[25] = {1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,24,25};
-    int min_error = 100;;  
+    float min_error = 100;
     float error = 0.0;
     int right_a;
     int right_b;
@@ -168,27 +170,32 @@ char *nokey_decode(char *input, char *output) {
     0.0214,  // z
 };
 
-    //compute frequency of CZECH_ALPHABET_FREQ from freq.h file
+  
+    float *decoded_freq = malloc(ALPHABET_SIZE * sizeof(float));
     for(int i = 0; i < 12; i++){
         for(int j = 0; j < 25; j++){
             char *decoded_text = decode(a_key[i], b_key[j], encoded_text);
 
             printf("Decoded text: %s\n", decoded_text);
-            //get frequency of encoded text
-            float *decoded_freq = frequency(decoded_text);
-            
-        
-            printf("%f", decoded_freq[i]);
-            for(int i = 0; i < ALPHABET_SIZE; i++){
+            decoded_freq = frequency(decoded_text);
+       
+            //calculate error as substraction of frequency analysis of input and frequency analysis of decoded_text and their sum
+            error = 0;
+            for(int k = 0; k < ALPHABET_SIZE; k++){
+                error += fabs(czech_freq[k] - decoded_freq[k]);
+                printf("Error: %f\n", error);
             }
-
-            // if(error < min_error){
-            //     min_error = error;
-            //     right_a = a_key[i];
-            //     right_b = b_key[j];
-            // }
+            
+            if(error < min_error){
+                min_error = error;
+                right_a = a_key[i];
+                right_b = b_key[j];
+            }
         }
     }
+    printf("Min error: %f\n", min_error);
+    printf("Right a---: %d\n", right_a);
+    printf("Right b---: %d\n", right_b);
 
     fclose(input_fp);
     fclose(output_fp);
@@ -197,7 +204,8 @@ char *nokey_decode(char *input, char *output) {
     char alphabet[ALPHABET_SIZE] = {'A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'J', 'K', 'L', 'M',
                          'N', 'O', 'P', 'Q', 'R', 'S', 'T', 'U', 'V', 'W', 'X', 'Y', 'Z'};
 
-    return encoded_text;
+    decoded_text = decode(right_a, right_b, encoded_text);
+    return decoded_text;
 }
 
 

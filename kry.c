@@ -108,10 +108,8 @@ char *nokey_decode(char *input, char *output) {
         return NULL;
     }
 
-    while (fgets(encoded_text, sizeof(encoded_text), input_fp)) {
-        
-    }
-    // fgets(encoded_text, 255, input_fp);
+    
+    fgets(encoded_text, 255, input_fp);
     fprintf(output_fp, "%s", encoded_text);
     printf("%s", encoded_text);
 

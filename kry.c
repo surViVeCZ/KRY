@@ -6,17 +6,6 @@
 
 #define ALPHABET_SIZE 26
 
-//TODO rewrite, all copied from GPT
-int modInverse(int a, int m) {
-    int x;
-    for (x = 1; x < m; x++) {
-        if (((a % m) * (x % m)) % m == 1) {
-            return x;
-        }
-    }
-    return -1;
-}
-
 char *encode(int a, int b, char *text) {
     printf("Encoding with a=%d and b=%d, with text %s\n", a, b, text);
     int x = 0;
@@ -35,6 +24,7 @@ char *encode(int a, int b, char *text) {
         }
         encoded[i] = encoded_char;
     }
+    free(encoded);
     return encoded;
 }
 
@@ -96,15 +86,6 @@ float *frequency(char *s){
         count = 0;
     }
     return freq;
-}
-
-//get error from frequency analysis of input and frequency analysis of decoded_text
-float get_error(char *input_freq, char *decoded_freq){
-    float error = 0.0;
-    for(int i = 0; i < ALPHABET_SIZE; i++){
-        error += abs(input_freq[i] - decoded_freq[i]);
-    }
-    return error;
 }
 
 
@@ -194,15 +175,11 @@ char *nokey_decode(char *input, char *output) {
         }
     }
     printf("Min error: %f\n", min_error);
-    printf("Right a---: %d\n", right_a);
-    printf("Right b---: %d\n", right_b);
+    printf("--Right a: %d\n", right_a);
+    printf("--Right b: %d\n", right_b);
 
     fclose(input_fp);
     fclose(output_fp);
-
-
-    char alphabet[ALPHABET_SIZE] = {'A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'J', 'K', 'L', 'M',
-                         'N', 'O', 'P', 'Q', 'R', 'S', 'T', 'U', 'V', 'W', 'X', 'Y', 'Z'};
 
     decoded_text = decode(right_a, right_b, encoded_text);
     return decoded_text;

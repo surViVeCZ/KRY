@@ -1,3 +1,8 @@
+//Date: 3.9.2023
+//Author: Bc. Petr Pouček
+//FIT VUT Brno
+//KRY - 1. projekt
+
 #include <stdio.h>
 #include <string.h>
 #include <stdlib.h>
@@ -7,57 +12,57 @@
 #define ALPHABET_SIZE 26
 
 char *encode(int a, int b, char *text) {
-    printf("Encoding with a=%d and b=%d, with text %s\n", a, b, text);
+    // printf("Encoding with a=%d and b=%d, with text %s\n", a, b, text);
     int x = 0;
     char *encoded = malloc(strlen(text) * sizeof(char));
 
-    for(unsigned i = 0; i < strlen(text); i++){ //ignore spaces in text
+    for(unsigned i = 0; i < strlen(text); i++){ 
         if (text[i] >= 'A' && text[i] <= 'Z') {
             x = text[i] - 'A';
-        } else if (text[i] >= 'a' && text[i] <= 'z') {
-            x = text[i] - 'a';
         }
-        char encoded_char = (a * x + b) % ALPHABET_SIZE + 'A';
+        char encoded_char = (a * x + b) % 26 + 'A';
+
+        //ignoring spaces in text
         if(text[i] == ' '){
             encoded[i] = ' ';
             continue;
         }
         encoded[i] = encoded_char;
     }
-    free(encoded);
     return encoded;
 }
 
 char *decode(int a, int b, char *text) {
-    printf("Decoding with a=%d and b=%d, with text %s\n", a, b, text);
+    //printf("Decoding with a=%d and b=%d, with text %s\n", a, b, text);
     int x = 0;
     char *decoded = malloc(strlen(text) * sizeof(char));
 
-    int MI = 0; //multiplicative inverse
-    for(int i= 0; i < a; i++){
-        MI=((i*ALPHABET_SIZE)+1);
-        if(MI % a == 0){
+    //multiplicative inverse
+    int MI = 0; 
+    for(int i = 0; i < a; i++){
+        MI = ((i * ALPHABET_SIZE) + 1);
+        if (MI % a == 0){
             break;
         }
     }
+
     MI=MI/a;
-    for(unsigned i = 0; i < strlen(text); i++){ //ignore spaces in text
+    for(unsigned i = 0; i < strlen(text); i++){
         if (text[i] >= 'A' && text[i] <= 'Z') {
             x = text[i] - 'A';
-        } else if (text[i] >= 'a' && text[i] <= 'z') {
-            x = text[i] - 'a';
-        }else if (text[i] == ' '){
+        }
+        if (text[i] == ' '){
             decoded[i] = ' ';
             continue;
         }
 
-
-        // printf("%c:%d ", text[i],x);
         char decoded_char = (MI * (x - b) % ALPHABET_SIZE);
         if (decoded_char < 0){
             decoded_char = decoded_char + ALPHABET_SIZE;
         }
         decoded_char = decoded_char + 'A'; 
+
+        //ignoring spaces in text
         if(text[i] == ' '){
             decoded[i] = ' ';
             continue;
@@ -67,22 +72,17 @@ char *decode(int a, int b, char *text) {
     return decoded;
 }
 
-
-
-//function for frequency analysis, prints out the frequency of each character in the text
+//calculates frequency of each character
 float *frequency(char *s){
     float *freq = malloc(ALPHABET_SIZE * sizeof(float));
-    int i = 0;
-    int j = 0;
     int count = 0;
-    int len = strlen(s);
-    for(i = 0; i < ALPHABET_SIZE; i++){
-        for(j = 0; j < len; j++){
-            if(s[j] == 'a' + i || s[j] == 'A' + i){
+    for(int i = 0; i < ALPHABET_SIZE; i++){
+        for(unsigned j = 0; j < strlen(s); j++){
+            if(s[j] == 'A' + i){
                 count++;
             }
         }
-        freq[i] = (float)count / len;
+        freq[i] = (float)count / strlen(s);
         count = 0;
     }
     return freq;
@@ -110,8 +110,7 @@ char *nokey_decode(char *input, char *output) {
 
     
     fgets(encoded_text, 255, input_fp);
-    fprintf(output_fp, "%s", encoded_text);
-    printf("%s", encoded_text);
+    // printf("%s", encoded_text);
 
     int a_key[12] = {1,3,5,7,9,11,15,17,19,21,23,25};
     int b_key[25] = {1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,24,25};
@@ -155,15 +154,16 @@ char *nokey_decode(char *input, char *output) {
         for(int j = 0; j < 25; j++){
             char *decoded_text = decode(a_key[i], b_key[j], encoded_text);
 
-            printf("Decoded text: %s\n", decoded_text);
+            // printf("Decoded text: %s\n", decoded_text);
             decoded_freq = frequency(decoded_text);
        
             //calculate error as substraction of frequency analysis of input and frequency analysis of decoded_text and their sum
             error = 0;
             for(int k = 0; k < ALPHABET_SIZE; k++){
                 error += fabs(czech_freq[k] - decoded_freq[k]);
-                printf("Error: %f\n", error);
+                //printf("Error: %f\n", error);
             }
+            free(decoded_freq);
             
             if(error < min_error){
                 min_error = error;
@@ -172,14 +172,19 @@ char *nokey_decode(char *input, char *output) {
             }
         }
     }
-    printf("Min error: %f\n", min_error);
-    printf("--Right a: %d\n", right_a);
-    printf("--Right b: %d\n", right_b);
+    // printf("Min error: %f\n", min_error);
+
+    //right keys
+    printf("a=%d,b=%d", right_a, right_b);
+ 
+
+    decoded_text = decode(right_a, right_b, encoded_text);
+    output_fp = fopen(output, "w");
+    fprintf(output_fp, "%s", decoded_text);
 
     fclose(input_fp);
     fclose(output_fp);
 
-    decoded_text = decode(right_a, right_b, encoded_text);
     return decoded_text;
 }
 
@@ -210,25 +215,46 @@ int main(int argc, char *argv[]){
             output_file = argv[i+1];
         }
         else {
-            printf("Unknown option: %s\n", argv[i]);
-            return 1;
+            if(argv[6] != NULL && i == 6){
+                text_to_encode = argv[6];
+                text_to_decode = argv[6];
+            }
+            else{
+                fprintf(stderr, "Wrong argument\n");
+                return 1;
+            }
         }
     }
     char *encoded = NULL;
     char *decoded = NULL;
-
-    if (strcmp(mode, "-e") == 0) {
-        encoded = encode(a, b, text_to_encode);
-        printf("Encoded text: %s\n", encoded);
-    } else if (strcmp(mode, "-d") == 0) {
-        decoded = decode(a, b, text_to_decode);
-        printf("Decoded text: %s\n", decoded);
-    } else if (strcmp(mode, "-c") == 0) {
-        decoded = nokey_decode(input_file, output_file);
-        printf("Decoded text: %s\n", decoded);
-        return 1;
+    if(strcmp(mode, "-e") == 0 || strcmp(mode, "-d") == 0){
+        if(argc != 7){
+            printf("%d", argc);
+            fprintf(stderr, "Wrong amount of arguments\n");
+            return 1;
+        }
+        else{
+            if (strcmp(mode, "-e") == 0) {
+                encoded = encode(a, b, text_to_encode);
+                printf("%s", encoded);
+                free(encoded);
+            } else if (strcmp(mode, "-d") == 0) {
+                decoded = decode(a, b, text_to_decode);
+                printf("%s", decoded);
+                free(decoded);
+            }
+        }
+    }else if(strcmp(mode, "-c") == 0) {
+        if(argc != 6){
+            fprintf(stderr, "Wrong amount of arguments\n");
+            return 1;
+        }
+        else if (strcmp(mode, "-c") == 0) {
+            decoded = nokey_decode(input_file, output_file);
+            //printf("Decoded text: %s\n", decoded);
+        }
     } else {
-        printf("Unknown mode: %s\n", mode);
+        fprintf(stderr, "Unknown mode: %s\n", mode);
         return 1;
     }
     return 0;

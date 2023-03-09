@@ -149,7 +149,7 @@ char *nokey_decode(char *input, char *output) {
 };
 
   
-    float *decoded_freq = malloc(ALPHABET_SIZE * sizeof(float));
+    float *decoded_freq = NULL;
     for(int i = 0; i < 12; i++){
         for(int j = 0; j < 25; j++){
             char *decoded_text = decode(a_key[i], b_key[j], encoded_text);
@@ -163,6 +163,7 @@ char *nokey_decode(char *input, char *output) {
                 error += fabs(czech_freq[k] - decoded_freq[k]);
                 //printf("Error: %f\n", error);
             }
+            free(decoded_text);
             free(decoded_freq);
             
             if(error < min_error){
@@ -251,6 +252,7 @@ int main(int argc, char *argv[]){
         }
         else if (strcmp(mode, "-c") == 0) {
             decoded = nokey_decode(input_file, output_file);
+            free(decoded);
             //printf("Decoded text: %s\n", decoded);
         }
     } else {

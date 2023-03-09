@@ -1,0 +1,1 @@
+alias vg='valgrind --leak-check=full -v --track-origins=yes --log-file=vg_logfile.out'

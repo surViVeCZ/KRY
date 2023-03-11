@@ -74,12 +74,6 @@ char *decode(int a, int b, char *text) {
             decoded_char = decoded_char + ALPHABET_SIZE;
         }
         decoded_char = decoded_char + 'A'; 
-
-        //ignoring spaces in text
-        if(text[i] == ' '){
-            decoded[i] = ' ';
-            continue;
-        }
         decoded[i] = decoded_char;
     }
     return decoded;

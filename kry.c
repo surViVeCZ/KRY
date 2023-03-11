@@ -21,6 +21,8 @@ char *encode(int a, int b, char *text) {
     for(unsigned i = 0; i < strlen(text); i++){ 
         if (text[i] >= 'A' && text[i] <= 'Z') {
             x = text[i] - 'A';
+        }else if(text[i] >= 'a' && text[i] <= 'z'){
+            x = text[i] - 'a';
         }
         //using equation for affine cipher encoding
         char encoded_char = (a * x + b) % 26 + 'A';

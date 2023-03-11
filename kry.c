@@ -37,12 +37,7 @@ char *encode(int a, int b, char *text) {
     return encoded;
 }
 
-//decoding with key
-char *decode(int a, int b, char *text) {
-    int x = 0;
-    char *decoded = malloc(strlen(text) * sizeof(char));
-
-    //multiplicative inverse
+int multiplicative_inverse(int a, int m) {
     int MI = 0; 
     for(unsigned i = 0; i < a; i++){
         MI = ((i * ALPHABET_SIZE) + 1);
@@ -50,8 +45,18 @@ char *decode(int a, int b, char *text) {
             break;
         }
     }
-
     MI=MI/a;
+    return MI;
+}
+
+//decoding with key
+char *decode(int a, int b, char *text) {
+    int x = 0;
+    char *decoded = malloc(strlen(text) * sizeof(char));
+
+    //multiplicative inverse
+    int MI = multiplicative_inverse(a, ALPHABET_SIZE);
+ 
     for(unsigned i = 0; i < strlen(text); i++){
         if (text[i] >= 'A' && text[i] <= 'Z') {
             x = text[i] - 'A';

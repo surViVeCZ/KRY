@@ -1,8 +1,8 @@
 #ifndef CZECH_ALPHABET_H
 #define CZECH_ALPHABET_H
 
-static const float CZECH_ALPHABET_FREQ[] = {
-    0.115,   // a - 0
+static const float czech_freq[] = {
+    0.115,
     0.0187,  // b
     0.0187,  // c
     0.0125,  // d
@@ -28,6 +28,6 @@ static const float CZECH_ALPHABET_FREQ[] = {
     0.0193,  // x
     0.0016,  // y
     0.0214,  // z
-};
+    };
 
 #endif  // CZECH_ALPHABET_H

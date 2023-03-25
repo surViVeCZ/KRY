@@ -6,6 +6,9 @@
 
 import socket
 import sys
+import secrets
+from Crypto.PublicKey import RSA  # pip install crypto
+import os
 
 
 def server_mode(port):
@@ -43,7 +46,8 @@ def client_mode(port):
 
         # send message
         client_socket.send(message.encode())
-        if message == " " or message == "":
+        # enter to exit
+        if message == "":
             break
 
         # get response from server
@@ -53,8 +57,27 @@ def client_mode(port):
     client_socket.close()
 
 
-# main
+def generate_AES128():
+    # AES using same key for both encryption and decryption
+    key = secrets.token_bytes(16)
+    print(key)
+
+
+def generate_rsa_keys():
+    key = RSA.generate(2048)
+
+    # RSA private key
+    with open('cert/id_rsa', 'wb') as f:
+        f.write(key.export_key(format='PEM'))
+
+    # RSA public key
+    with open('cert/id_rsa.pub', 'wb') as f:
+        f.write(key.publickey().export_key(format='PEM'))
+
+
 if __name__ == '__main__':
+    generate_AES128()
+    generate_rsa_keys()
 
     no_args = len(sys.argv)
 

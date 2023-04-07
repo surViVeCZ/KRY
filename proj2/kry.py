@@ -18,6 +18,12 @@ import secrets
 session_key = secrets.token_bytes(32)
 
 
+def add_checksum(message):
+    """Adds an MD5 checksum to the message"""
+    md5_hash = hashlib.md5(message.encode()).hexdigest()
+    return message + md5_hash
+
+
 def server_mode(port):
     HOST = '127.0.0.1'
     server_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
@@ -82,10 +88,16 @@ def client_mode(port):
             private_key = f.read()
         signed_md5 = pkcs1_15.new(RSA.import_key(private_key)).sign(md5_hash)
 
+        if message == "":
+            break
+        # add the hash to the message
+        message = add_checksum(message)
+
         # Encrypting the hash and session key with AES
         cipher = AES.new(session_key, AES.MODE_EAX)
         nonce = cipher.nonce
-        ciphertext, tag = cipher.encrypt_and_digest(signed_md5 + session_key)
+        ciphertext, tag = cipher.encrypt_and_digest(
+            signed_md5 + session_key)
 
         # send the encrypted hash, session key, and message to server
         data = {
@@ -95,10 +107,6 @@ def client_mode(port):
             "tag": tag
         }
         client_socket.send(str(data).encode())
-
-        # enter to exit
-        if message == "":
-            break
 
         # get response from server
         # response = eval(client_socket.recv(1024).decode())

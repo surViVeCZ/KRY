@@ -53,8 +53,8 @@ def server_mode(port):
     while True:
         try:
             # Receive data from client
-            data = client_socket.recv(1024)
-
+            data = client_socket.recv(4096)
+            print(f"Received data from client {client_address}: {data}")
             if not data:
                 print(f"Client {client_address} disconnected")
                 break
@@ -81,10 +81,10 @@ def server_mode(port):
             message = plaintext[16:]
 
             # Verify the MD5 hash
-            if hashlib.md5(message).digest() != md5_hash:
-                print("Message integrity compromised!")
+            if md5_hash == hashlib.md5(message).digest():
+                print(f"Client {client_address} sent: {message.decode()}")
             else:
-                print(f"Received message from client: {message.decode()}")
+                print(f"Client {client_address} sent an invalid message")
 
         except ConnectionResetError:
             print(f"Client {client_address} disconnected unexpectedly")
@@ -111,6 +111,11 @@ def client_mode(port):
         # Calculate the MD5 hash of the message
         md5_hash = hashlib.md5(message.encode()).digest()
 
+        # pad the hash
+        md5_hash = pad_hash(md5_hash)
+        # Add the MD5 hash to the message
+        message = add_checksum(message)
+
         # Encrypt the MD5 hash and message using AES
         cipher = AES.new(session_key, AES.MODE_EAX)
         ciphertext, tag = cipher.encrypt_and_digest(
@@ -130,6 +135,7 @@ def client_mode(port):
             "ciphertext": ciphertext,
             "tag": tag
         }
+        print(data)
 
         # Send data packet to server
         client_socket.send(str(data).encode())

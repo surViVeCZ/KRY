@@ -1,17 +1,19 @@
-# Date: 25.3.2023
-# Description: KRY project 2 - Hybrid encryption of client-server communication
-
-
 import socket
 import sys
 import secrets
 from Crypto.PublicKey import RSA  # pip install crypto
-import os
 from Crypto.Signature import pkcs1_15
+from Crypto.Cipher import AES
 import hashlib
-# pip install pycryptodome
 
-AES_KEY = secrets.token_bytes(16)  # AES key for encryption and decryption
+
+from Crypto.Signature import pkcs1_15
+from Crypto.Cipher import AES, PKCS1_v1_5
+from Crypto.PublicKey import RSA
+from Crypto.Hash import MD5
+import socket
+import sys
+import secrets
 
 
 def server_mode(port):
@@ -30,21 +32,32 @@ def server_mode(port):
             print(f"Client {client_address} disconnected")
             break
 
-        # Compute MD5 checksum of message
-        checksum = md5_checksum(message)
-
         # Sign checksum with private key
         with open('cert/id_rsa', 'rb') as f:
             private_key = RSA.import_key(f.read())
 
-        #signature = private_key.sign(checksum.encode(), '')
+        # Hash the message
+        md5_hash = MD5.new(message.encode())
 
-        # Append signature to message
-        #signed_message = f"{message} {signature}"
+        # Padding the hash
+        padder = PKCS1_v1_5.new(private_key)
+        padded_hash = padder.sign(md5_hash)
+
+        # Encrypting the hash with AES
+        key = secrets.token_bytes(16)
+        cipher = AES.new(key, AES.MODE_EAX)
+        nonce = cipher.nonce
+        ciphertext, tag = cipher.encrypt_and_digest(padded_hash)
 
         print(f"Received message from client: {message}")
-        response = f"Data recieved: {message}"
-        client_socket.send(response.encode())
+        response = {
+            "message": f"Data received: {message}",
+            "key": key,
+            "nonce": nonce,
+            "ciphertext": ciphertext,
+            "tag": tag
+        }
+        client_socket.send(str(response).encode())
 
     server_socket.close()
 
@@ -57,31 +70,41 @@ def client_mode(port):
     while True:
         message = input("Enter message: ")
 
-        # get md5 checksum of message
-        checksum = md5_checksum(message)
-
         with open('cert/id_rsa', 'rb') as f:
             private_key = RSA.import_key(f.read())
 
-        #!NEFUNGUJE
-        # sign checksum with private key
-        # signature = private_key.sign(checksum.encode(), '')
+        # Hash the message
+        md5_hash = MD5.new(message.encode())
 
-        client_socket.send(message.encode())
+        # Padding the hash
+        padder = PKCS1_v1_5.new(private_key)
+        padded_hash = pkcs1_15.new(private_key).sign(md5_hash)
+
+        # Encrypting the hash with AES
+        key = secrets.token_bytes(16)
+        cipher = AES.new(key, AES.MODE_EAX)
+        nonce = cipher.nonce
+        ciphertext, tag = cipher.encrypt_and_digest(padded_hash)
+
+        # send the encrypted hash and message to server
+        data = {
+            "message": message.encode(),
+            "key": key,
+            "nonce": nonce,
+            "ciphertext": ciphertext,
+            "tag": tag
+        }
+        client_socket.send(str(data).encode())
+
         # enter to exit
         if message == "":
             break
 
         # get response from server
-        response = client_socket.recv(1024).decode()
-        print(f"Server response: {response}")
+        response = eval(client_socket.recv(1024).decode())
+        print(f"Server response: {response['message']}")
 
     client_socket.close()
-
-
-# MD5 checksum for message
-def md5_checksum(message):
-    return hashlib.md5(message.encode()).hexdigest()
 
 
 def generate_rsa_keys():

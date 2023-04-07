@@ -52,31 +52,39 @@ def server_mode(port):
     # client connected
     while True:
         try:
-            message = client_socket.recv(1024).decode()
-            if not message:
+            # Receive data from client
+            data = client_socket.recv(1024)
+
+            if not data:
                 print(f"Client {client_address} disconnected")
                 break
 
-            # Hash the message
-            md5_hash = MD5.new(message.encode())
+            # Convert received data to dictionary
+            received_data = eval(data.decode())
 
-            # Padding the hash
-            padded_hash = pad_hash(md5_hash.digest())
+            # Decrypt session key using private key
+            with open('cert/id_rsa', 'rb') as f:
+                private_key = RSA.import_key(f.read())
 
-            # Encrypting the hash and session key with AES
-            cipher = AES.new(session_key, AES.MODE_EAX)
-            nonce = cipher.nonce
-            ciphertext, tag = cipher.encrypt_and_digest(
-                padded_hash + session_key)
+            cipher_rsa = PKCS1_OAEP.new(private_key)
+            session_key = cipher_rsa.decrypt(
+                received_data["encoded_session_key"])
 
-            print(f"Received message from client: {message}")
-            response = {
-                "message": f"Data received: {message}",
-                "nonce": nonce,
-                "ciphertext": ciphertext,
-                "tag": tag
-            }
-            client_socket.send(str(response).encode())
+            # Decrypt the encrypted message using AES
+            cipher = AES.new(session_key, AES.MODE_EAX,
+                             nonce=received_data["nonce"])
+            plaintext = cipher.decrypt_and_verify(
+                received_data["ciphertext"], received_data["tag"])
+
+            # Extract the MD5 hash and message from the plaintext
+            md5_hash = plaintext[:16]
+            message = plaintext[16:]
+
+            # Verify the MD5 hash
+            if hashlib.md5(message).digest() != md5_hash:
+                print("Message integrity compromised!")
+            else:
+                print(f"Received message from client: {message.decode()}")
 
         except ConnectionResetError:
             print(f"Client {client_address} disconnected unexpectedly")
@@ -90,37 +98,40 @@ def client_mode(port):
     # Create socket and connect to server
     client_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     client_socket.connect((HOST, port))
+
+    # Generate session key
+    session_key = secrets.token_bytes(32)
+
     while True:
         message = input("Enter message: ")
 
-        # Hash the message
-        md5_hash = MD5.new(message.encode())
-
-        # Padding the hash
-        padded_hash = pad_hash(md5_hash.digest())
-
         if message == "":
             break
-        # add the hash to the message
-        message = add_checksum(message)
 
-        # Encrypting the hash and session key with AES
+        # Calculate the MD5 hash of the message
+        md5_hash = hashlib.md5(message.encode()).digest()
+
+        # Encrypt the MD5 hash and message using AES
         cipher = AES.new(session_key, AES.MODE_EAX)
-        nonce = cipher.nonce
         ciphertext, tag = cipher.encrypt_and_digest(
-            padded_hash + session_key + message.encode())
+            md5_hash + message.encode())
 
-        # create encoded session key
-        encoded_session_key = encrypt_session_key(
-            session_key, 'cert/id_rsa.pub')
+        # Encode session key using server's public key
+        with open('cert/id_rsa.pub', 'rb') as f:
+            public_key = RSA.import_key(f.read())
 
-        # send the encrypted hash, session key, and message to server
+        cipher_rsa = PKCS1_OAEP.new(public_key)
+        encoded_session_key = cipher_rsa.encrypt(session_key)
+
+        # Create data packet with encrypted message, session key, and nonce
         data = {
-            "message": message.encode(),
-            "nonce": nonce,
+            "encoded_session_key": encoded_session_key,
+            "nonce": cipher.nonce,
             "ciphertext": ciphertext,
             "tag": tag
         }
+
+        # Send data packet to server
         client_socket.send(str(data).encode())
 
     client_socket.close()

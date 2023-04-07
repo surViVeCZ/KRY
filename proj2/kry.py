@@ -1,3 +1,7 @@
+# Date: 07.04.2023
+# Description: KRY project 2 - Hybrid encryption of client-server communication
+
+
 import socket
 import sys
 import secrets
@@ -5,15 +9,9 @@ from Crypto.PublicKey import RSA  # pip install crypto
 from Crypto.Signature import pkcs1_15
 from Crypto.Cipher import AES
 import hashlib
-
-
-from Crypto.Signature import pkcs1_15
-from Crypto.Cipher import AES, PKCS1_v1_5
-from Crypto.PublicKey import RSA
 from Crypto.Hash import MD5
-import socket
-import sys
-import secrets
+from Crypto.Cipher import PKCS1_OAEP
+
 # Generates random numbers
 session_key = secrets.token_bytes(32)
 
@@ -22,6 +20,14 @@ def add_checksum(message):
     """Adds an MD5 checksum to the message"""
     md5_hash = hashlib.md5(message.encode()).hexdigest()
     return message + md5_hash
+
+
+def pad_hash(hash):
+    # Pad the hash using OAEP
+    with open('cert/id_rsa.pub', 'rb') as f:
+        public_key = f.read()
+    cipher_rsa = PKCS1_OAEP.new(RSA.import_key(public_key))
+    return cipher_rsa.encrypt(hash)
 
 
 def server_mode(port):
@@ -45,10 +51,7 @@ def server_mode(port):
             md5_hash = MD5.new(message.encode())
 
             # Padding the hash
-            with open('cert/id_rsa', 'rb') as f:
-                private_key = f.read()
-            padder = pkcs1_15.new(RSA.import_key(private_key))
-            padded_hash = padder.sign(md5_hash)
+            padded_hash = pad_hash(md5_hash.digest())
 
             # Encrypting the hash and session key with AES
             cipher = AES.new(session_key, AES.MODE_EAX)
@@ -83,10 +86,8 @@ def client_mode(port):
         # Hash the message
         md5_hash = MD5.new(message.encode())
 
-        # Sign the hash
-        with open('cert/id_rsa', 'rb') as f:
-            private_key = f.read()
-        signed_md5 = pkcs1_15.new(RSA.import_key(private_key)).sign(md5_hash)
+        # Padding the hash
+        padded_hash = pad_hash(md5_hash.digest())
 
         if message == "":
             break
@@ -97,7 +98,7 @@ def client_mode(port):
         cipher = AES.new(session_key, AES.MODE_EAX)
         nonce = cipher.nonce
         ciphertext, tag = cipher.encrypt_and_digest(
-            signed_md5 + session_key)
+            padded_hash + session_key + message.encode())
 
         # send the encrypted hash, session key, and message to server
         data = {
@@ -107,10 +108,6 @@ def client_mode(port):
             "tag": tag
         }
         client_socket.send(str(data).encode())
-
-        # get response from server
-        # response = eval(client_socket.recv(1024).decode())
-        # print(f"Server response: {response['message']}")
 
     client_socket.close()
 

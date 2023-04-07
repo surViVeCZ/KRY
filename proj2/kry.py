@@ -16,6 +16,16 @@ from Crypto.Cipher import PKCS1_OAEP
 session_key = secrets.token_bytes(32)
 
 
+def encrypt_session_key(session_key, public_key_path):
+    """padding + rsa with public key on session key"""
+    with open(public_key_path, 'rb') as f:
+        public_key = RSA.import_key(f.read())
+
+    cipher_rsa = PKCS1_OAEP.new(public_key)
+    padded_session_key = cipher_rsa.encrypt(session_key)
+    return padded_session_key
+
+
 def add_checksum(message):
     """Adds an MD5 checksum to the message"""
     md5_hash = hashlib.md5(message.encode()).hexdigest()
@@ -99,6 +109,10 @@ def client_mode(port):
         nonce = cipher.nonce
         ciphertext, tag = cipher.encrypt_and_digest(
             padded_hash + session_key + message.encode())
+
+        # create encoded session key
+        encoded_session_key = encrypt_session_key(
+            session_key, 'cert/id_rsa.pub')
 
         # send the encrypted hash, session key, and message to server
         data = {

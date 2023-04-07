@@ -40,7 +40,7 @@ def server_mode(port):
         md5_hash = MD5.new(message.encode())
 
         # Padding the hash
-        padder = PKCS1_v1_5.new(private_key)
+        padder = pkcs1_15.new(private_key)
         padded_hash = padder.sign(md5_hash)
 
         # Encrypting the hash with AES
@@ -76,15 +76,15 @@ def client_mode(port):
         # Hash the message
         md5_hash = MD5.new(message.encode())
 
-        # Padding the hash
-        padder = PKCS1_v1_5.new(private_key)
-        padded_hash = pkcs1_15.new(private_key).sign(md5_hash)
+        # signed mg5 hash
+        signed_md5 = pkcs1_15.new(private_key).sign(md5_hash)
+        print(signed_md5)
 
         # Encrypting the hash with AES
         key = secrets.token_bytes(16)
         cipher = AES.new(key, AES.MODE_EAX)
         nonce = cipher.nonce
-        ciphertext, tag = cipher.encrypt_and_digest(padded_hash)
+        ciphertext, tag = cipher.encrypt_and_digest(signed_md5)
 
         # send the encrypted hash and message to server
         data = {
@@ -101,8 +101,8 @@ def client_mode(port):
             break
 
         # get response from server
-        response = eval(client_socket.recv(1024).decode())
-        print(f"Server response: {response['message']}")
+        # response = eval(client_socket.recv(1024).decode())
+        # print(f"Server response: {response['message']}")
 
     client_socket.close()
 

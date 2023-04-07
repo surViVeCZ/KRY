@@ -14,6 +14,8 @@ from Crypto.Hash import MD5
 import socket
 import sys
 import secrets
+# Generates random numbers
+session_key = secrets.token_bytes(32)
 
 
 def server_mode(port):
@@ -27,37 +29,39 @@ def server_mode(port):
 
     # client connected
     while True:
-        message = client_socket.recv(1024).decode()
-        if not message:
-            print(f"Client {client_address} disconnected")
+        try:
+            message = client_socket.recv(1024).decode()
+            if not message:
+                print(f"Client {client_address} disconnected")
+                break
+
+            # Hash the message
+            md5_hash = MD5.new(message.encode())
+
+            # Padding the hash
+            with open('cert/id_rsa', 'rb') as f:
+                private_key = f.read()
+            padder = pkcs1_15.new(RSA.import_key(private_key))
+            padded_hash = padder.sign(md5_hash)
+
+            # Encrypting the hash and session key with AES
+            cipher = AES.new(session_key, AES.MODE_EAX)
+            nonce = cipher.nonce
+            ciphertext, tag = cipher.encrypt_and_digest(
+                padded_hash + session_key)
+
+            print(f"Received message from client: {message}")
+            response = {
+                "message": f"Data received: {message}",
+                "nonce": nonce,
+                "ciphertext": ciphertext,
+                "tag": tag
+            }
+            client_socket.send(str(response).encode())
+
+        except ConnectionResetError:
+            print(f"Client {client_address} disconnected unexpectedly")
             break
-
-        # Sign checksum with private key
-        with open('cert/id_rsa', 'rb') as f:
-            private_key = RSA.import_key(f.read())
-
-        # Hash the message
-        md5_hash = MD5.new(message.encode())
-
-        # Padding the hash
-        padder = pkcs1_15.new(private_key)
-        padded_hash = padder.sign(md5_hash)
-
-        # Encrypting the hash with AES
-        key = secrets.token_bytes(16)
-        cipher = AES.new(key, AES.MODE_EAX)
-        nonce = cipher.nonce
-        ciphertext, tag = cipher.encrypt_and_digest(padded_hash)
-
-        print(f"Received message from client: {message}")
-        response = {
-            "message": f"Data received: {message}",
-            "key": key,
-            "nonce": nonce,
-            "ciphertext": ciphertext,
-            "tag": tag
-        }
-        client_socket.send(str(response).encode())
 
     server_socket.close()
 
@@ -70,26 +74,22 @@ def client_mode(port):
     while True:
         message = input("Enter message: ")
 
-        with open('cert/id_rsa', 'rb') as f:
-            private_key = RSA.import_key(f.read())
-
         # Hash the message
         md5_hash = MD5.new(message.encode())
 
-        # signed mg5 hash
-        signed_md5 = pkcs1_15.new(private_key).sign(md5_hash)
-        print(signed_md5)
+        # Sign the hash
+        with open('cert/id_rsa', 'rb') as f:
+            private_key = f.read()
+        signed_md5 = pkcs1_15.new(RSA.import_key(private_key)).sign(md5_hash)
 
-        # Encrypting the hash with AES
-        key = secrets.token_bytes(16)
-        cipher = AES.new(key, AES.MODE_EAX)
+        # Encrypting the hash and session key with AES
+        cipher = AES.new(session_key, AES.MODE_EAX)
         nonce = cipher.nonce
-        ciphertext, tag = cipher.encrypt_and_digest(signed_md5)
+        ciphertext, tag = cipher.encrypt_and_digest(signed_md5 + session_key)
 
-        # send the encrypted hash and message to server
+        # send the encrypted hash, session key, and message to server
         data = {
             "message": message.encode(),
-            "key": key,
             "nonce": nonce,
             "ciphertext": ciphertext,
             "tag": tag

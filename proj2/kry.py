@@ -54,13 +54,14 @@ def server_mode(port):
         try:
             # Receive data from client
             data = client_socket.recv(4096)
+            data = data.decode()
             print(f"Received data from client {client_address}: {data}")
             if not data:
                 print(f"Client {client_address} disconnected")
                 break
 
             # Convert received data to dictionary
-            received_data = eval(data.decode())
+            received_data = eval(data)
 
             # Decrypt session key using private key
             with open('cert/id_rsa', 'rb') as f:
@@ -135,10 +136,10 @@ def client_mode(port):
             "ciphertext": ciphertext,
             "tag": tag
         }
-        print(data)
+        print(f"Sending data to server: {data}")
 
-        # Send data packet to server
-        client_socket.send(str(data).encode())
+        # Convert data packet to byte string and send to server
+        client_socket.send(bytes(str(data).encode()))
 
     client_socket.close()
 

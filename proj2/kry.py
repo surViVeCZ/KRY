@@ -16,14 +16,40 @@ from Crypto.Cipher import PKCS1_OAEP
 session_key = secrets.token_bytes(32)
 
 
-def encrypt_session_key(session_key, public_key_path):
-    """padding + rsa with public key on session key"""
-    with open(public_key_path, 'rb') as f:
-        public_key = RSA.import_key(f.read())
+def RSA_encode(message, key):
+    """RSA encryption of message using key"""
+    e, n = key
+    encoded_message = [pow(ord(char), e, n) for char in message]
+    return encoded_message
 
-    cipher_rsa = PKCS1_OAEP.new(public_key)
-    padded_session_key = cipher_rsa.encrypt(session_key)
-    return padded_session_key
+
+def RSA_decode(encoded_message, key):
+    """RSA decryption of message using key"""
+    d, n = key
+    decoded_message = ''.join([chr(pow(char, d, n))
+                              for char in encoded_message])
+    return decoded_message
+
+
+def encrypt_session_key(session_key, public_key_path):
+    """RSA encryption of session key using public key"""
+    with open(public_key_path, 'r') as f:
+        public_key_str = f.read().split()
+        e, n = int(public_key_str[0]), int(public_key_str[1])
+
+    encoded_session_key = RSA_encode(session_key.hex(), (e, n))
+    return encoded_session_key
+
+
+def decrypt_session_key(encoded_session_key, private_key_path):
+    """RSA decryption of encoded session key using private key"""
+    with open(private_key_path, 'r') as f:
+        private_key_str = f.read().split()
+        d, n = int(private_key_str[0]), int(private_key_str[1])
+
+    session_key_hex = RSA_decode(encoded_session_key, (d, n))
+    session_key = bytes.fromhex(session_key_hex)
+    return session_key
 
 
 def add_checksum(message):
@@ -33,11 +59,13 @@ def add_checksum(message):
 
 
 def pad_hash(hash):
-    # Pad the hash using OAEP
-    with open('cert/id_rsa.pub', 'rb') as f:
-        public_key = f.read()
-    cipher_rsa = PKCS1_OAEP.new(RSA.import_key(public_key))
-    return cipher_rsa.encrypt(hash)
+    """Pads the hash using PKCS#1 OAEP"""
+    with open('cert/id_rsa.pub', 'r') as f:
+        public_key_str = f.read()
+        public_key = RSA.import_key(public_key_str)
+        cipher_rsa = PKCS1_OAEP.new(public_key)
+        padded_hash = cipher_rsa.encrypt(hash)
+    return padded_hash
 
 
 def server_mode(port):
@@ -113,6 +141,7 @@ def client_mode(port):
         md5_hash = hashlib.md5(message.encode()).digest()
 
         # pad the hash
+        public_key_str = open('cert/id_rsa.pub', 'r').read()
         md5_hash = pad_hash(md5_hash)
         # Add the MD5 hash to the message
         message = add_checksum(message)

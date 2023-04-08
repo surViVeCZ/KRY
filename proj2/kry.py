@@ -5,6 +5,8 @@
 import socket
 import sys
 import secrets
+import typing
+import hashlib
 from Crypto.PublicKey import RSA  # pip install crypto
 from Crypto.Signature import pkcs1_15
 from Crypto.Cipher import AES
@@ -23,12 +25,11 @@ def RSA_encode(message, key):
     return encoded_message
 
 
-def RSA_decode(encoded_message, key):
-    """RSA decryption of message using key"""
-    d, n = key
-    decoded_message = ''.join([chr(pow(char, d, n))
-                              for char in encoded_message])
-    return decoded_message
+def RSA_decode(encoded_message, private_key):
+    d, n = private_key
+    # make it suitable for long numbers
+    message = [chr(pow(char, d, n)) for char in encoded_message]
+    return ''.join(message)
 
 
 def encrypt_session_key(session_key, public_key_path):
@@ -52,19 +53,20 @@ def decrypt_session_key(encoded_session_key, private_key_path):
     return session_key
 
 
-def add_checksum(message):
-    """Adds an MD5 checksum to the message"""
-    md5_hash = hashlib.md5(message.encode()).hexdigest()
-    return message + md5_hash
+def add_checksum(message: str, hash: typing.List[int]):
+    """Adds checksum to the message"""
+    checksum = ' '.join(str(i) for i in hash)
+    return message + '|' + checksum
 
 
 def pad_hash(hash):
-    """Pads the hash using PKCS#1 OAEP"""
-    with open('cert/id_rsa.pub', 'r') as f:
-        public_key_str = f.read()
-        public_key = RSA.import_key(public_key_str)
-        cipher_rsa = PKCS1_OAEP.new(public_key)
-        padded_hash = cipher_rsa.encrypt(hash)
+    """Pads the hash using custom OAEP-like padding"""
+    hash_len = len(hash)
+    padded_hash = bytearray()
+    for i in range(16 - hash_len):
+        padded_hash.append(0)
+    padded_hash.extend(hash)
+    padded_hash.extend(secrets.token_bytes(16 - hash_len))
     return padded_hash
 
 
@@ -138,37 +140,53 @@ def client_mode(port):
             break
 
         # Calculate the MD5 hash of the message
+        print("1.) Calculating MD5 hash of message...")
         md5_hash = hashlib.md5(message.encode()).digest()
 
         # pad the hash
-        public_key_str = open('cert/id_rsa.pub', 'r').read()
+        print("2.) Padding MD5 hash...")
         md5_hash = pad_hash(md5_hash)
         # Add the MD5 hash to the message
-        message = add_checksum(message)
 
-        # Encrypt the MD5 hash and message using AES
+        # encode padded hash using private key and custom RSA_encode
+        with open('cert/id_rsa', 'rb') as f:
+            private_key = RSA.import_key(f.read())
+        d, n = private_key.d, private_key.n
+        print("3.) Encoding MD5 hash...")
+        encoded_MD5 = RSA_encode(md5_hash.hex(), (d, n))
+
+        # add encoded MD5 hash to message
+        # print("4.) Adding encoded MD5 hash to message...")
+        # message = add_checksum(message, encoded_MD5)
+
+        # Add the session key to the message
+        print("4.) Adding session key to message...")
+        message = message.encode() + session_key
+
+        # create dictionary from message, encoded MD5 hash, and session key
+        AES_input = {"message": message, "encoded_MD5": encoded_MD5,
+                     "session_key": session_key}
+
+        # Encrypt AES_input using AES and send it to the server
+        print("5.) Encrypting message...")
         cipher = AES.new(session_key, AES.MODE_EAX)
-        ciphertext, tag = cipher.encrypt_and_digest(
-            md5_hash + message.encode())
+        ciphertext, tag = cipher.encrypt_and_digest(AES_input["message"])
 
-        # Encode session key using server's public key
+        # Encrypt session key using public key
         with open('cert/id_rsa.pub', 'rb') as f:
             public_key = RSA.import_key(f.read())
-
         cipher_rsa = PKCS1_OAEP.new(public_key)
-        encoded_session_key = cipher_rsa.encrypt(session_key)
+        encoded_session_key = cipher_rsa.encrypt(AES_input["session_key"])
 
-        # Create data packet with encrypted message, session key, and nonce
-        data = {
-            "encoded_session_key": encoded_session_key,
-            "nonce": cipher.nonce,
-            "ciphertext": ciphertext,
-            "tag": tag
-        }
-        print(f"Sending data to server: {data}")
+        # create dictionary from ciphertext, tag, and encoded session key
+        AES_output = {"ciphertext": ciphertext, "tag": tag,
+                      "encoded_session_key": encoded_session_key,
+                      "nonce": cipher.nonce}
+        print(f"AES input: {AES_output}")
 
-        # Convert data packet to byte string and send to server
-        client_socket.send(bytes(str(data).encode()))
+        # send dictionary to server
+        print("6.) Sending message to server...")
+        client_socket.send(str(AES_output).encode())
 
     client_socket.close()
 

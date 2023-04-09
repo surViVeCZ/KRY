@@ -106,6 +106,9 @@ def server_mode(port):
             data = data.decode()
 
             # Convert received data to dictionary
+            # check for empty string
+            if data == "":
+                break
             received_data = eval(data)
             print(received_data)
 
@@ -117,8 +120,7 @@ def server_mode(port):
             # Decrypt the encrypted message using AES
             cipher = AES.new(session_key, AES.MODE_EAX,
                              nonce=received_data["nonce"])
-            plaintext = cipher.decrypt_and_verify(
-                received_data["ciphertext"], received_data["tag"])
+            plaintext = cipher.decrypt(received_data["ciphertext"])
 
             # Extract the MD5 hash and message from the plaintext
             md5_hash = plaintext[:16]

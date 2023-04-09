@@ -85,16 +85,17 @@ def server_mode(port):
     while True:
         try:
             # receive data from client in while loop, until it reaches end
-            data = client_socket.recv(4096)
+            data = b''
+            while True:
+                packet = client_socket.recv(4096)
+                if not packet:
+                    break
+                data += packet
             data = data.decode()
-            print(f"Received data from client {client_address}: {data}")
-            if not data:
-                print(f"Client {client_address} disconnected")
-                break
 
             # Convert received data to dictionary
             received_data = eval(data)
-
+            print(received_data)
             # Decrypt session key using private key
             with open('cert/id_rsa', 'rb') as f:
                 private_key = RSA.import_key(f.read())

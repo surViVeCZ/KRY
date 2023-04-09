@@ -16,7 +16,7 @@ from Crypto.Cipher import PKCS1_OAEP
 
 
 def generate_session_key():
-    session_key = secrets.token_bytes(32)
+    session_key = secrets.token_bytes(16)  # 16 bytes = 128 bits
     return session_key
 
 
@@ -28,9 +28,12 @@ def RSA_encode(message, key):
 
 
 def RSA_decode(ciphertext, private_key):
-    d, n = private_key.d, private_key.n
-    plaintext = [pow(c, d, n) for c in ciphertext]
-    return bytes(plaintext)
+    d, n = private_key
+    plaintext = ""
+    for char in ciphertext:
+        m = pow(char, d, n)
+        plaintext += chr(m)
+    return plaintext.encode('utf-8')
 
 
 def encrypt_session_key(session_key, public_key_path):
@@ -80,6 +83,10 @@ def server_mode(port):
     server_socket.bind((HOST, port))
     server_socket.listen()
 
+    # Load private key
+    with open('cert/id_rsa', 'rb') as f:
+        private_key = RSA.import_key(f.read())
+
     # waiting for client to connect
     client_socket, client_address = server_socket.accept()
 
@@ -100,13 +107,8 @@ def server_mode(port):
             print(received_data)
 
             # Decrypt session key using private key
-            with open('cert/id_rsa', 'rb') as f:
-                private_key = RSA.import_key(f.read())
-
-            cipher_rsa = PKCS1_OAEP.new(private_key)
             encoded_session_key = received_data["session_key"]
-            session_key = cipher_rsa.decrypt(
-                RSA_decode(encoded_session_key, private_key))
+            session_key = RSA_decode(encoded_session_key, private_key)
 
             # Decrypt the encrypted message using AES
             cipher = AES.new(session_key, AES.MODE_EAX,
@@ -160,8 +162,9 @@ def client_mode(port):
         encoded_MD5 = RSA_encode(md5_hash.hex(), (d, n))
 
         # add encoded MD5 hash to message
-        print("4.) Adding encoded MD5 hash to message...")
-        message = add_checksum(message, encoded_MD5)
+        # print("4.) Adding encoded MD5 hash to message...")
+        # message = add_checksum(message, encoded_MD5)
+        message = message.encode()
 
         # Add the session key to the message
         print("5.) Generating session key...")

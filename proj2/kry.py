@@ -13,10 +13,11 @@ from Crypto.Cipher import AES
 import hashlib
 from Crypto.Hash import MD5
 from Crypto.Cipher import PKCS1_OAEP
+from Crypto.Random import get_random_bytes
 
 
 def generate_session_key():
-    session_key = secrets.token_bytes(16)  # 16 bytes = 128 bits
+    session_key = get_random_bytes(16)  # 16 bytes = 128 bits
     return session_key
 
 
@@ -28,12 +29,13 @@ def RSA_encode(message, key):
 
 
 def RSA_decode(ciphertext, private_key):
-    d, n = private_key
-    plaintext = ""
+    """RSA decryption of ciphertext using private_key"""
+    d, n = private_key.d, private_key.n
+    plaintext = b""
     for char in ciphertext:
         m = pow(char, d, n)
-        plaintext += chr(m)
-    return plaintext.encode('utf-8')
+        plaintext += m.to_bytes((m.bit_length() + 7) // 8, 'big')
+    return plaintext
 
 
 def encrypt_session_key(session_key, public_key_path):
@@ -47,13 +49,13 @@ def encrypt_session_key(session_key, public_key_path):
 
 
 def decrypt_session_key(encoded_session_key, private_key_path):
-    """RSA decryption of encoded session key using private key, skip the first line"""
+    """RSA decryption of encoded session key using private key"""
     with open(private_key_path, 'rb') as f:
-        private_key = RSA.import_key(f.read())
+        private_key = RSA.import_key(f.read(), passphrase=None)
 
     d, n = private_key.d, private_key.n
-    session_key = RSA_decode(encoded_session_key, (d, n))
-    return bytes.fromhex(session_key)
+    session_key = RSA_decode(encoded_session_key, private_key)
+    return session_key
 
 
 def add_checksum(message: str, hash: typing.List[int]):
@@ -64,7 +66,7 @@ def add_checksum(message: str, hash: typing.List[int]):
 
 def pad_hash(hash):
     """Pads the hash using custom OAEP-like padding
-    This function pads the hash with zeros to make its 
+    This function pads the hash with zeros to make its
     length equal to 16 bytes, and then adds random bytes
     to the end to fill up the remaining space. You can
     use this function to pad the MD5 hash before adding it to the message."""
@@ -78,6 +80,7 @@ def pad_hash(hash):
 
 
 def server_mode(port):
+
     HOST = '127.0.0.1'
     server_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     server_socket.bind((HOST, port))
@@ -108,7 +111,8 @@ def server_mode(port):
 
             # Decrypt session key using private key
             encoded_session_key = received_data["session_key"]
-            session_key = RSA_decode(encoded_session_key, private_key)
+            session_key = decrypt_session_key(
+                encoded_session_key, 'cert/id_rsa')
 
             # Decrypt the encrypted message using AES
             cipher = AES.new(session_key, AES.MODE_EAX,

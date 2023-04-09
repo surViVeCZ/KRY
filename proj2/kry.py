@@ -14,8 +14,10 @@ import hashlib
 from Crypto.Hash import MD5
 from Crypto.Cipher import PKCS1_OAEP
 
-# Generates random numbers
-session_key = secrets.token_bytes(32)
+
+def generate_session_key():
+    session_key = secrets.token_bytes(32)
+    return session_key
 
 
 def RSA_encode(message, key):
@@ -98,8 +100,7 @@ def server_mode(port):
                 private_key = RSA.import_key(f.read())
 
             cipher_rsa = PKCS1_OAEP.new(private_key)
-            session_key = cipher_rsa.decrypt(
-                received_data["encoded_session_key"])
+            session_key = cipher_rsa.decrypt(received_data["session_key"])
 
             # Decrypt the encrypted message using AES
             cipher = AES.new(session_key, AES.MODE_EAX,
@@ -158,10 +159,11 @@ def client_mode(port):
         # add encoded MD5 hash to message
         # print("4.) Adding encoded MD5 hash to message...")
         # message = add_checksum(message, encoded_MD5)
+        message = message.encode()
 
         # Add the session key to the message
-        print("4.) Adding session key to message...")
-        message = message.encode() + session_key
+        print("4.) Generating session key...")
+        session_key = generate_session_key()
 
         # create dictionary from message, encoded MD5 hash, and session key
         AES_input = {"message": message, "encoded_MD5": encoded_MD5,
@@ -180,12 +182,12 @@ def client_mode(port):
 
         # create dictionary from ciphertext, tag, and encoded session key
         AES_output = {"ciphertext": ciphertext, "tag": tag,
-                      "encoded_session_key": encoded_session_key,
+                      "session_key": encoded_session_key,
                       "nonce": cipher.nonce}
-        print(f"AES input: {AES_output}")
 
         # send dictionary to server
-        print("6.) Sending message to server...")
+        print("6.) Sending packet (encoded data + MD5 + encoded session key) server...")
+        print(f"AES input: {AES_output}")
         client_socket.send(str(AES_output).encode())
 
     client_socket.close()

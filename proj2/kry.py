@@ -60,7 +60,11 @@ def add_checksum(message: str, hash: typing.List[int]):
 
 
 def pad_hash(hash):
-    """Pads the hash using custom OAEP-like padding"""
+    """Pads the hash using custom OAEP-like padding
+    This function pads the hash with zeros to make its 
+    length equal to 16 bytes, and then adds random bytes
+    to the end to fill up the remaining space. You can
+    use this function to pad the MD5 hash before adding it to the message."""
     hash_len = len(hash)
     padded_hash = bytearray()
     for i in range(16 - hash_len):

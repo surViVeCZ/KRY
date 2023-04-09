@@ -27,11 +27,10 @@ def RSA_encode(message, key):
     return encoded_message
 
 
-def RSA_decode(encoded_message, private_key):
-    d, n = private_key
-    # make it suitable for long numbers
-    message = [chr(pow(char, d, n)) for char in encoded_message]
-    return ''.join(message)
+def RSA_decode(ciphertext, private_key):
+    d, n = private_key.d, private_key.n
+    plaintext = [pow(c, d, n) for c in ciphertext]
+    return bytes(plaintext)
 
 
 def encrypt_session_key(session_key, public_key_path):
@@ -45,14 +44,13 @@ def encrypt_session_key(session_key, public_key_path):
 
 
 def decrypt_session_key(encoded_session_key, private_key_path):
-    """RSA decryption of encoded session key using private key"""
-    with open(private_key_path, 'r') as f:
-        private_key_str = f.read().split()
-        d, n = int(private_key_str[0]), int(private_key_str[1])
+    """RSA decryption of encoded session key using private key, skip the first line"""
+    with open(private_key_path, 'rb') as f:
+        private_key = RSA.import_key(f.read())
 
-    session_key_hex = RSA_decode(encoded_session_key, (d, n))
-    session_key = bytes.fromhex(session_key_hex)
-    return session_key
+    d, n = private_key.d, private_key.n
+    session_key = RSA_decode(encoded_session_key, (d, n))
+    return bytes.fromhex(session_key)
 
 
 def add_checksum(message: str, hash: typing.List[int]):
@@ -96,12 +94,15 @@ def server_mode(port):
             # Convert received data to dictionary
             received_data = eval(data)
             print(received_data)
+
             # Decrypt session key using private key
             with open('cert/id_rsa', 'rb') as f:
                 private_key = RSA.import_key(f.read())
 
             cipher_rsa = PKCS1_OAEP.new(private_key)
-            session_key = cipher_rsa.decrypt(received_data["session_key"])
+            encoded_session_key = received_data["session_key"]
+            session_key = cipher_rsa.decrypt(
+                RSA_decode(encoded_session_key, private_key))
 
             # Decrypt the encrypted message using AES
             cipher = AES.new(session_key, AES.MODE_EAX,
@@ -131,9 +132,6 @@ def client_mode(port):
     # Create socket and connect to server
     client_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     client_socket.connect((HOST, port))
-
-    # Generate session key
-    session_key = secrets.token_bytes(32)
 
     while True:
         message = input("Enter message: ")

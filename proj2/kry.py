@@ -36,10 +36,10 @@ def RSA_decode(encoded_message, private_key):
 
 def encrypt_session_key(session_key, public_key_path):
     """RSA encryption of session key using public key"""
-    with open(public_key_path, 'r') as f:
-        public_key_str = f.read().split()
-        e, n = int(public_key_str[0]), int(public_key_str[1])
+    with open(public_key_path, 'rb') as f:
+        public_key = RSA.import_key(f.read(), passphrase=None)
 
+    e, n = public_key.e, public_key.n
     encoded_session_key = RSA_encode(session_key.hex(), (e, n))
     return encoded_session_key
 
@@ -57,8 +57,8 @@ def decrypt_session_key(encoded_session_key, private_key_path):
 
 def add_checksum(message: str, hash: typing.List[int]):
     """Adds checksum to the message"""
-    checksum = ' '.join(str(i) for i in hash)
-    return message + '|' + checksum
+    message = message + str(hash)
+    return message.encode()
 
 
 def pad_hash(hash):
@@ -84,7 +84,7 @@ def server_mode(port):
     # client connected
     while True:
         try:
-            # Receive data from client
+            # receive data from client in while loop, until it reaches end
             data = client_socket.recv(4096)
             data = data.decode()
             print(f"Received data from client {client_address}: {data}")
@@ -157,28 +157,25 @@ def client_mode(port):
         encoded_MD5 = RSA_encode(md5_hash.hex(), (d, n))
 
         # add encoded MD5 hash to message
-        # print("4.) Adding encoded MD5 hash to message...")
-        # message = add_checksum(message, encoded_MD5)
-        message = message.encode()
+        print("4.) Adding encoded MD5 hash to message...")
+        message = add_checksum(message, encoded_MD5)
 
         # Add the session key to the message
-        print("4.) Generating session key...")
+        print("5.) Generating session key...")
         session_key = generate_session_key()
+
+        # encrypt session key using public key
+        encoded_session_key = encrypt_session_key(
+            session_key, 'cert/id_rsa.pub')
 
         # create dictionary from message, encoded MD5 hash, and session key
         AES_input = {"message": message, "encoded_MD5": encoded_MD5,
                      "session_key": session_key}
 
         # Encrypt AES_input using AES and send it to the server
-        print("5.) Encrypting message...")
+        print("6.) Encrypting message...")
         cipher = AES.new(session_key, AES.MODE_EAX)
         ciphertext, tag = cipher.encrypt_and_digest(AES_input["message"])
-
-        # Encrypt session key using public key
-        with open('cert/id_rsa.pub', 'rb') as f:
-            public_key = RSA.import_key(f.read())
-        cipher_rsa = PKCS1_OAEP.new(public_key)
-        encoded_session_key = cipher_rsa.encrypt(AES_input["session_key"])
 
         # create dictionary from ciphertext, tag, and encoded session key
         AES_output = {"ciphertext": ciphertext, "tag": tag,
@@ -186,7 +183,7 @@ def client_mode(port):
                       "nonce": cipher.nonce}
 
         # send dictionary to server
-        print("6.) Sending packet (encoded data + MD5 + encoded session key) server...")
+        print("7.) Sending packet (encoded data + MD5 + encoded session key) server...")
         print(f"AES input: {AES_output}")
         client_socket.send(str(AES_output).encode())
 

@@ -125,13 +125,22 @@ def server_mode(port):
 
             # Verify the MD5 hash of the message
             received_md5 = received_data["encoded_MD5"]
+            print(f'Encoded MD5: {received_md5}')
+            print(type(received_md5))
+            # load public key
+            with open('cert/id_rsa.pub', 'rb') as f:
+                public_key = RSA.import_key(f.read())
+            received_md5 = public_key._encrypt(received_md5)
+            received_md5_bytes = received_md5.to_bytes(255, 'big')
+            recv_md5_cut = received_md5_bytes[-16:]
+            # received_md5 = RSA_decode(received_md5, private_key)
+
             md5_hash = hashlib.md5(decrypted_message).digest()
-            expected_md5 = RSA_decode(received_md5, private_key)
 
-            print(f'Expected MD5: {expected_md5}')
-            print(type(expected_md5))
+            print(f'Expected MD5: {recv_md5_cut}')
+            print(f'Received MD5: {md5_hash}')
 
-            if received_md5 != expected_md5:
+            if recv_md5_cut != md5_hash:
                 print("Error: Received message is corrupted or tampered with.")
                 break
 
@@ -171,7 +180,11 @@ def client_mode(port):
             private_key = RSA.import_key(f.read())
         d, n = private_key.d, private_key.n
         print("3.) Encoding MD5 hash...")
-        encoded_MD5 = RSA_encode(md5_hash, private_key)
+        # encoded_MD5 = RSA_encode(md5_hash, private_key)
+
+        md5_int = int.from_bytes(md5_hash, byteorder='big')
+        encoded_MD5 = private_key._decrypt(md5_int)
+        encoded_MD5 = int(encoded_MD5)
 
         # add encoded MD5 hash to message
         # print("4.) Adding encoded MD5 hash to message...")

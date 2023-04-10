@@ -23,16 +23,17 @@ def generate_session_key():
 
 def RSA_encode(message, key):
     """RSA encryption of message using key"""
-    cipher_rsa = PKCS1_OAEP.new(key)
-    ciphertext = cipher_rsa.encrypt(message)
+    message_int = int.from_bytes(message, byteorder='big')
+    ciphertext = key._encrypt(message_int)
     return ciphertext
 
 
-def RSA_decode(ciphertext, private_key):
+def RSA_decode(ciphertext: int, private_key):
     """RSA decryption of ciphertext using private_key"""
-    cipher_rsa = PKCS1_OAEP.new(private_key)
-    plaintext = cipher_rsa.decrypt(ciphertext)
-    return plaintext
+    message_int = private_key._decrypt(ciphertext)
+    message_int = int(message_int)
+    message = message_int.to_bytes(255, byteorder='big')
+    return message
 
 
 def encrypt_session_key(session_key, public_key_path):
@@ -44,7 +45,7 @@ def encrypt_session_key(session_key, public_key_path):
     return encoded_session_key
 
 
-def decrypt_session_key(encoded_session_key, private_key_path):
+def decrypt_session_key(encoded_session_key: int, private_key_path):
     """RSA decryption of encoded session key using private key"""
     with open(private_key_path, 'rb') as f:
         private_key = RSA.import_key(f.read(), passphrase=None)
@@ -111,6 +112,9 @@ def server_mode(port):
             session_key = decrypt_session_key(
                 encoded_session_key, 'cert/id_rsa')
 
+            # remove padding
+            session_key = session_key[-16:]
+
             # Decrypt ciphertext and obtain signed MD5 hash without MAC check
             ciphertext = received_data["ciphertext"]
             tag = received_data["tag"]
@@ -122,8 +126,10 @@ def server_mode(port):
             # Verify the MD5 hash of the message
             received_md5 = received_data["encoded_MD5"]
             md5_hash = hashlib.md5(decrypted_message).digest()
-            rsa_cipher = PKCS1_OAEP.new(private_key)
-            expected_md5 = rsa_cipher.decrypt(received_md5)
+            expected_md5 = RSA_decode(received_md5, private_key)
+
+            print(f'Expected MD5: {expected_md5}')
+            print(type(expected_md5))
 
             if received_md5 != expected_md5:
                 print("Error: Received message is corrupted or tampered with.")
@@ -175,12 +181,12 @@ def client_mode(port):
         # Add the session key to the message
         print("5.) Generating session key...")
         session_key = generate_session_key()
-        #print(f"Session key: {session_key.hex()}")
+        # print(f"Session key: {session_key.hex()}")
 
         # encrypt session key using public key
         encoded_session_key = encrypt_session_key(
             session_key, 'cert/id_rsa.pub')
-        #print(f"Encoded session key: {encoded_session_key}")
+        # print(f"Encoded session key: {encoded_session_key}")
 
         # Encrypt AES_input using AES and send it to the server
         print("6.) Encrypting message...")

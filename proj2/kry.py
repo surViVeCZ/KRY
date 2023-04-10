@@ -23,18 +23,15 @@ def generate_session_key():
 
 def RSA_encode(message, key):
     """RSA encryption of message using key"""
-    e, n = key
-    encoded_message = [pow(ord(char), e, n) for char in message]
-    return encoded_message
+    cipher_rsa = PKCS1_OAEP.new(key)
+    ciphertext = cipher_rsa.encrypt(message)
+    return ciphertext
 
 
 def RSA_decode(ciphertext, private_key):
     """RSA decryption of ciphertext using private_key"""
-    d, n = private_key.d, private_key.n
-    plaintext = b""
-    for char in ciphertext:
-        m = pow(char, d, n)
-        plaintext += m.to_bytes((m.bit_length() + 7) // 8, 'big')
+    cipher_rsa = PKCS1_OAEP.new(private_key)
+    plaintext = cipher_rsa.decrypt(ciphertext)
     return plaintext
 
 
@@ -43,8 +40,7 @@ def encrypt_session_key(session_key, public_key_path):
     with open(public_key_path, 'rb') as f:
         public_key = RSA.import_key(f.read(), passphrase=None)
 
-    e, n = public_key.e, public_key.n
-    encoded_session_key = RSA_encode(session_key.hex(), (e, n))
+    encoded_session_key = RSA_encode(session_key, public_key)
     return encoded_session_key
 
 
@@ -53,15 +49,14 @@ def decrypt_session_key(encoded_session_key, private_key_path):
     with open(private_key_path, 'rb') as f:
         private_key = RSA.import_key(f.read(), passphrase=None)
 
-    d, n = private_key.d, private_key.n
     session_key = RSA_decode(encoded_session_key, private_key)
     return session_key
 
 
-def add_checksum(message: str, hash: typing.List[int]):
+def add_checksum(message: bytes, hash: typing.List[int]):
     """Adds checksum to the message"""
-    message = message + str(hash)
-    return message.encode()
+    message = message + str(hash).encode()
+    return message
 
 
 def pad_hash(hash):
@@ -75,7 +70,7 @@ def pad_hash(hash):
     for i in range(16 - hash_len):
         padded_hash.append(0)
     padded_hash.extend(hash)
-    padded_hash.extend(secrets.token_bytes(16 - hash_len))
+    padded_hash.extend(get_random_bytes(16 - hash_len))
     return padded_hash
 
 
@@ -116,16 +111,20 @@ def server_mode(port):
             session_key = decrypt_session_key(
                 encoded_session_key, 'cert/id_rsa')
 
-            # Decrypt ciphertext and obtain signed MD5 hash
+            # Decrypt ciphertext and obtain signed MD5 hash without MAC check
             ciphertext = received_data["ciphertext"]
             tag = received_data["tag"]
             nonce = received_data["nonce"]
-            cipher = AES.new(session_key, AES.MODE_GCM, nonce=nonce)
-            decrypted_message = cipher.decrypt_and_verify(ciphertext, tag)
+            cipher = AES.new(session_key, AES.MODE_EAX, nonce=nonce)
+            decrypted_message = cipher.decrypt(ciphertext)
+            print(f'Decrypted message: {decrypted_message}')
 
             # Verify the MD5 hash of the message
             received_md5 = received_data["encoded_MD5"]
-            expected_md5 = hashlib.md5(decrypted_message).digest()
+            md5_hash = hashlib.md5(decrypted_message).digest()
+            rsa_cipher = PKCS1_OAEP.new(private_key)
+            expected_md5 = rsa_cipher.decrypt(received_md5)
+
             if received_md5 != expected_md5:
                 print("Error: Received message is corrupted or tampered with.")
                 break
@@ -166,7 +165,7 @@ def client_mode(port):
             private_key = RSA.import_key(f.read())
         d, n = private_key.d, private_key.n
         print("3.) Encoding MD5 hash...")
-        encoded_MD5 = RSA_encode(md5_hash.hex(), (d, n))
+        encoded_MD5 = RSA_encode(md5_hash, private_key)
 
         # add encoded MD5 hash to message
         # print("4.) Adding encoded MD5 hash to message...")

@@ -116,24 +116,22 @@ def server_mode(port):
             session_key = decrypt_session_key(
                 encoded_session_key, 'cert/id_rsa')
 
-            # Decrypt the encrypted message using AES and the session key
+            # Decrypt ciphertext and obtain signed MD5 hash
             ciphertext = received_data["ciphertext"]
             tag = received_data["tag"]
             nonce = received_data["nonce"]
-            cipher = AES.new(session_key, AES.MODE_EAX, nonce)
-            plaintext = cipher.decrypt_and_verify(ciphertext, tag)
+            cipher = AES.new(session_key, AES.MODE_GCM, nonce=nonce)
+            decrypted_message = cipher.decrypt_and_verify(ciphertext, tag)
 
-            # Extract the MD5 hash and message from the plaintext
-            md5_hash = plaintext[:16]
-            message = plaintext[16:]
+            # Verify the MD5 hash of the message
+            received_md5 = received_data["encoded_MD5"]
+            expected_md5 = hashlib.md5(decrypted_message).digest()
+            if received_md5 != expected_md5:
+                print("Error: Received message is corrupted or tampered with.")
+                break
 
-            # Verify the MD5 hash
-            md5 = hashlib.md5()
-            md5.update(message)
-            if md5.digest() == md5_hash:
-                print(f"Client {client_address} sent: {message.decode()}")
-            else:
-                print(f"Client {client_address} sent an invalid message")
+            # If verification is successful, print the message
+            print("Received message: " + decrypted_message.decode())
 
         except ConnectionResetError:
             print(f"Client {client_address} disconnected unexpectedly")

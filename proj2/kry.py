@@ -117,10 +117,14 @@ def server_mode(port):
             session_key = decrypt_session_key(
                 encoded_session_key, 'cert/id_rsa')
 
-            # Decrypt the encrypted message using AES
-            cipher = AES.new(session_key, AES.MODE_EAX,
-                             nonce=received_data["nonce"])
-            plaintext = cipher.decrypt(received_data["ciphertext"])
+            # convert session key fto string
+            session_key = session_key.decode()
+            print(f'Session key: {session_key}')
+
+           # Decrypt the encrypted message using AES and the session key
+            encrypted_message = received_data["message"]
+            cipher = AES.new(session_key.encode(), AES.MODE_EAX)
+            plaintext = cipher.decrypt(encrypted_message)
 
             # Extract the MD5 hash and message from the plaintext
             md5_hash = plaintext[:16]
@@ -175,10 +179,12 @@ def client_mode(port):
         # Add the session key to the message
         print("5.) Generating session key...")
         session_key = generate_session_key()
+        print(f"Session key: {session_key.hex()}")
 
         # encrypt session key using public key
         encoded_session_key = encrypt_session_key(
             session_key, 'cert/id_rsa.pub')
+        print(f"Encoded session key: {encoded_session_key}")
 
         # create dictionary from message, encoded MD5 hash, and session key
         AES_input = {"message": message, "encoded_MD5": encoded_MD5,
@@ -192,11 +198,11 @@ def client_mode(port):
         # create dictionary from ciphertext, tag, and encoded session key
         AES_output = {"ciphertext": ciphertext, "tag": tag,
                       "session_key": encoded_session_key,
-                      "nonce": cipher.nonce}
+                      "nonce": cipher.nonce, "encoded_MD5": encoded_MD5}
 
         # send dictionary to server
         print("7.) Sending packet (encoded data + MD5 + encoded session key) server...")
-        print(f"AES input: {AES_output}")
+        # print(f"AES input: {AES_output}")
         client_socket.send(str(AES_output).encode())
 
     client_socket.close()

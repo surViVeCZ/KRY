@@ -80,7 +80,6 @@ def pad_hash(hash):
 
 
 def server_mode(port):
-
     HOST = '127.0.0.1'
     server_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     server_socket.bind((HOST, port))
@@ -117,21 +116,21 @@ def server_mode(port):
             session_key = decrypt_session_key(
                 encoded_session_key, 'cert/id_rsa')
 
-            # convert session key fto string
-            session_key = session_key.decode()
-            print(f'Session key: {session_key}')
-
-           # Decrypt the encrypted message using AES and the session key
-            encrypted_message = received_data["message"]
-            cipher = AES.new(session_key.encode(), AES.MODE_EAX)
-            plaintext = cipher.decrypt(encrypted_message)
+            # Decrypt the encrypted message using AES and the session key
+            ciphertext = received_data["ciphertext"]
+            tag = received_data["tag"]
+            nonce = received_data["nonce"]
+            cipher = AES.new(session_key, AES.MODE_EAX, nonce)
+            plaintext = cipher.decrypt_and_verify(ciphertext, tag)
 
             # Extract the MD5 hash and message from the plaintext
             md5_hash = plaintext[:16]
             message = plaintext[16:]
 
             # Verify the MD5 hash
-            if md5_hash == hashlib.md5(message).digest():
+            md5 = hashlib.md5()
+            md5.update(message)
+            if md5.digest() == md5_hash:
                 print(f"Client {client_address} sent: {message.decode()}")
             else:
                 print(f"Client {client_address} sent an invalid message")
@@ -179,21 +178,17 @@ def client_mode(port):
         # Add the session key to the message
         print("5.) Generating session key...")
         session_key = generate_session_key()
-        print(f"Session key: {session_key.hex()}")
+        #print(f"Session key: {session_key.hex()}")
 
         # encrypt session key using public key
         encoded_session_key = encrypt_session_key(
             session_key, 'cert/id_rsa.pub')
-        print(f"Encoded session key: {encoded_session_key}")
-
-        # create dictionary from message, encoded MD5 hash, and session key
-        AES_input = {"message": message, "encoded_MD5": encoded_MD5,
-                     "session_key": session_key}
+        #print(f"Encoded session key: {encoded_session_key}")
 
         # Encrypt AES_input using AES and send it to the server
         print("6.) Encrypting message...")
         cipher = AES.new(session_key, AES.MODE_EAX)
-        ciphertext, tag = cipher.encrypt_and_digest(AES_input["message"])
+        ciphertext, tag = cipher.encrypt_and_digest(message)
 
         # create dictionary from ciphertext, tag, and encoded session key
         AES_output = {"ciphertext": ciphertext, "tag": tag,
@@ -202,7 +197,7 @@ def client_mode(port):
 
         # send dictionary to server
         print("7.) Sending packet (encoded data + MD5 + encoded session key) server...")
-        # print(f"AES input: {AES_output}")
+        print(f"AES input: {AES_output}")
         client_socket.send(str(AES_output).encode())
 
     client_socket.close()

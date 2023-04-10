@@ -32,7 +32,7 @@ def RSA_decode(ciphertext: int, private_key):
     """RSA decryption of ciphertext using private_key"""
     message_int = private_key._decrypt(ciphertext)
     message_int = int(message_int)
-    message = message_int.to_bytes(255, byteorder='big')
+    message = message_int.to_bytes((message_int.bit_length() + 7) // 8, 'big')
     return message
 
 

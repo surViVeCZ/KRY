@@ -90,6 +90,7 @@ def server_mode(port):
 
     # client connected
     while True:
+        print("s: \"Client has joined\"")
         try:
             # receive data from client in while loop, until it reaches end
             data = b''
@@ -121,7 +122,6 @@ def server_mode(port):
             nonce = received_data["nonce"]
             cipher = AES.new(session_key, AES.MODE_EAX, nonce=nonce)
             decrypted_message = cipher.decrypt(ciphertext)
-            print(f'Decrypted message: {decrypted_message}')
 
             # Verify the MD5 hash of the message
             received_md5 = received_data["encoded_MD5"]
@@ -141,16 +141,18 @@ def server_mode(port):
             print(f'Received MD5: {md5_hash}')
 
             if recv_md5_cut != md5_hash:
-                print("Error: Received message is corrupted or tampered with.")
+                print("The integrity of the report has been compromised.")
                 break
 
             # If verification is successful, print the message
-            print("Received message: " + decrypted_message.decode())
+            print("The integrity of the message has not been compromised")
+            print("Plaintext: " + decrypted_message.decode())
 
         except ConnectionResetError:
             print(f"Client {client_address} disconnected unexpectedly")
             break
 
+    print("Closing connection...")
     server_socket.close()
 
 
@@ -159,9 +161,9 @@ def client_mode(port):
     # Create socket and connect to server
     client_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     client_socket.connect((HOST, port))
-
+    print("Successfully connected to server")
     while True:
-        message = input("Enter message: ")
+        message = input("Enter input: ")
 
         if message == "":
             break
@@ -172,7 +174,9 @@ def client_mode(port):
 
         # pad the hash
         print("2.) Padding MD5 hash...")
+        print(f"MD5=<{md5_hash}>")
         md5_hash = pad_hash(md5_hash)
+        print(f"MD5_padding=<{md5_hash}>")
         # Add the MD5 hash to the message
 
         # encode padded hash using private key and custom RSA_encode
@@ -185,6 +189,7 @@ def client_mode(port):
         md5_int = int.from_bytes(md5_hash, byteorder='big')
         encoded_MD5 = private_key._decrypt(md5_int)
         encoded_MD5 = int(encoded_MD5)
+        print(f"RSA_MD5_hash=<{encoded_MD5}>")
 
         # add encoded MD5 hash to message
         # print("4.) Adding encoded MD5 hash to message...")
@@ -213,8 +218,13 @@ def client_mode(port):
 
         # send dictionary to server
         print("7.) Sending packet (encoded data + MD5 + encoded session key) server...")
-        print(f"AES input: {AES_output}")
-        client_socket.send(str(AES_output).encode())
+        print(AES_output)
+        try:
+            client_socket.send(str(AES_output).encode())
+            print("The message was successfully delivered")
+        except ConnectionResetError:
+            print("The message was sent again")
+            break
 
     client_socket.close()
 

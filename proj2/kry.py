@@ -222,13 +222,11 @@ def client_mode(port):
 def generate_rsa_keys():
     key = RSA.generate(2048)
 
-    # RSA private key
+    # Write id_rsa and id_rsa.pub to files, create them if they don't exist
     with open('cert/id_rsa', 'wb') as f:
-        f.write(key.export_key(format='PEM'))
-
-    # RSA public key
+        f.write(key.export_key('PEM'))
     with open('cert/id_rsa.pub', 'wb') as f:
-        f.write(key.publickey().export_key(format='PEM'))
+        f.write(key.publickey().export_key('PEM'))
 
 
 if __name__ == '__main__':

@@ -7,7 +7,7 @@ import sys
 import secrets
 import typing
 import hashlib
-from Crypto.PublicKey import RSA  # pip install crypto
+from Crypto.PublicKey import RSA
 from Crypto.Signature import pkcs1_15
 from Crypto.Cipher import AES
 import hashlib

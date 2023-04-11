@@ -7,7 +7,7 @@ import sys
 import secrets
 import typing
 import hashlib
-from Crypto.PublicKey import RSA
+from Crypto.PublicKey import RSA  # pip install crypto
 from Crypto.Signature import pkcs1_15
 from Crypto.Cipher import AES
 import hashlib
@@ -240,13 +240,15 @@ if __name__ == '__main__':
         print("Wrong usage of arguments: python3 kry.py TYPE=s/c PORT=number")
         sys.exit()
 
-    mode = sys.argv[1].split('=')[1]  # s = server, c = client
-    port = int(sys.argv[2].split('=')[1])
+    try:
+        port = int(sys.argv[2])
+    except ValueError:
+        print("Invalid port number")
+        exit()
 
-    if mode == 's':
+    if sys.argv[1] == 's':
         server_mode(port)
-
-    elif mode == 'c':
+    elif sys.argv[1] == 'c':
         client_mode(port)
     else:
         print("Wrong usage of arguments: python3 kry.py TYPE=s/c PORT=number")

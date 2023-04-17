@@ -1,6 +1,7 @@
-# Date: 07.04.2023
+# Date: 12.04.2023
 # Description: KRY project 2 - Hybrid encryption of client-server communication
-
+# Author: Bc. Petr Pouč
+# Login: xpoucp01
 
 import socket
 import sys
@@ -22,14 +23,12 @@ def generate_session_key():
 
 
 def RSA_encode(message, key):
-    """RSA encryption of message using key"""
     message_int = int.from_bytes(message, byteorder='big')
     ciphertext = key._encrypt(message_int)
     return ciphertext
 
 
 def RSA_decode(ciphertext: int, private_key):
-    """RSA decryption of ciphertext using private_key"""
     message_int = private_key._decrypt(ciphertext)
     message_int = int(message_int)
     message = message_int.to_bytes((message_int.bit_length() + 7) // 8, 'big')
@@ -37,7 +36,6 @@ def RSA_decode(ciphertext: int, private_key):
 
 
 def encrypt_session_key(session_key, public_key_path):
-    """RSA encryption of session key using public key"""
     with open(public_key_path, 'rb') as f:
         public_key = RSA.import_key(f.read(), passphrase=None)
 
@@ -46,7 +44,6 @@ def encrypt_session_key(session_key, public_key_path):
 
 
 def decrypt_session_key(encoded_session_key: int, private_key_path):
-    """RSA decryption of encoded session key using private key"""
     with open(private_key_path, 'rb') as f:
         private_key = RSA.import_key(f.read(), passphrase=None)
 
@@ -55,24 +52,31 @@ def decrypt_session_key(encoded_session_key: int, private_key_path):
 
 
 def add_checksum(message: bytes, hash: typing.List[int]):
-    """Adds checksum to the message"""
     message = message + str(hash).encode()
     return message
 
 
 def pad_hash(hash):
-    """Pads the hash using custom OAEP-like padding
-    This function pads the hash with zeros to make its
-    length equal to 16 bytes, and then adds random bytes
-    to the end to fill up the remaining space. You can
-    use this function to pad the MD5 hash before adding it to the message."""
-    hash_len = len(hash)
-    padded_hash = bytearray()
-    for i in range(16 - hash_len):
-        padded_hash.append(0)
-    padded_hash.extend(hash)
-    padded_hash.extend(get_random_bytes(16 - hash_len))
+    # Get the current length of the hash
+    current_length = len(hash)
+
+    # Calculate the number of bytes needed for padding
+    padding_length = 256 - current_length
+
+    # Generate the padding random bytes
+    padding = get_random_bytes(padding_length)
+
+    # Append the padding bytes to the hash
+    padded_hash = hash + padding
+
     return padded_hash
+
+
+def remove_padding(padded_hash):
+    # Remove the padding bytes from the hash
+    hash = padded_hash[-16:]
+
+    return hash
 
 
 def server_mode(port):
@@ -106,50 +110,62 @@ def server_mode(port):
             if data == "":
                 break
             received_data = eval(data)
-            print(received_data)
 
             # Decrypt session key using private key
             encoded_session_key = received_data["session_key"]
+            print(f's: RSA_AES_key=<{encoded_session_key}>')
             session_key = decrypt_session_key(
                 encoded_session_key, 'cert/id_rsa')
 
+            ciphertext = received_data["ciphertext"]
+            print(f's: AES_cipher=<{received_data}>')
+
             # remove padding
             session_key = session_key[-16:]
+            print(f's: AES_key=<{session_key}>')
 
             # Decrypt ciphertext and obtain signed MD5 hash without MAC check
-            ciphertext = received_data["ciphertext"]
             tag = received_data["tag"]
             nonce = received_data["nonce"]
             cipher = AES.new(session_key, AES.MODE_EAX, nonce=nonce)
+            print(f's: AES_cipher {cipher}')
             decrypted_message = cipher.decrypt(ciphertext)
 
             # Verify the MD5 hash of the message
             received_md5 = received_data["encoded_MD5"]
-            print(f'Encoded MD5: {received_md5}')
-            print(type(received_md5))
+
+            print(f's: plaintext=<{decrypted_message.decode()}>')
+
             # load public key
             with open('cert/id_rsa.pub', 'rb') as f:
                 public_key = RSA.import_key(f.read())
             received_md5 = public_key._encrypt(received_md5)
-            received_md5_bytes = received_md5.to_bytes(255, 'big')
-            recv_md5_cut = received_md5_bytes[-16:]
+            received_md5_bytes = received_md5.to_bytes(
+                (received_md5.bit_length() + 7) // 8, 'big')
+            # first 16 bytes are the hash
+            recv_md5_cut = received_md5_bytes[:16]
             # received_md5 = RSA_decode(received_md5, private_key)
+
+            print(f's: MD5=<{received_md5}>')
 
             md5_hash = hashlib.md5(decrypted_message).digest()
 
             print(f'Expected MD5: {recv_md5_cut}')
-            print(f'Received MD5: {md5_hash}')
+            print(f'Received MD5: {md5_hash}\n')
 
             if recv_md5_cut != md5_hash:
                 print("The integrity of the report has been compromised.")
+                # send NACK
+                client_socket.sendall(b'NACK')
                 break
 
             # If verification is successful, print the message
-            print("The integrity of the message has not been compromised")
-            print("Plaintext: " + decrypted_message.decode())
+            print("s: The integrity of the message has not been compromised")
+            # send ACK
+            client_socket.sendall(b'ACK')
 
         except ConnectionResetError:
-            print(f"Client {client_address} disconnected unexpectedly")
+            print(f"s: Client {client_address} disconnected unexpectedly")
             break
 
     print("Closing connection...")
@@ -161,45 +177,42 @@ def client_mode(port):
     # Create socket and connect to server
     client_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     client_socket.connect((HOST, port))
-    print("Successfully connected to server")
+    print("c: Successfully connected to server")
+
     while True:
-        message = input("Enter input: ")
+        message = input("c: Enter input: ")
 
         if message == "":
             break
 
         # Calculate the MD5 hash of the message
-        print("1.) Calculating MD5 hash of message...")
         md5_hash = hashlib.md5(message.encode()).digest()
 
+        # session key(AES key)
+        session_key = generate_session_key()
+        print(f"c: AES_key<{session_key}>")
+        print(f"c: AES_key_padding={pad_hash(session_key)}")
+
         # pad the hash
-        print("2.) Padding MD5 hash...")
-        print(f"MD5=<{md5_hash}>")
+        print(f"c: MD5=<{md5_hash}>")
         md5_hash = pad_hash(md5_hash)
-        print(f"MD5_padding=<{md5_hash}>")
+        print(f"c: MD5_padding=<{md5_hash}>")
         # Add the MD5 hash to the message
 
         # encode padded hash using private key and custom RSA_encode
         with open('cert/id_rsa', 'rb') as f:
             private_key = RSA.import_key(f.read())
         d, n = private_key.d, private_key.n
-        print("3.) Encoding MD5 hash...")
         # encoded_MD5 = RSA_encode(md5_hash, private_key)
 
-        md5_int = int.from_bytes(md5_hash, byteorder='big')
+        md5_int = int.from_bytes(md5_hash, 'big')
+
+        # TODO zde je občas error
         encoded_MD5 = private_key._decrypt(md5_int)
         encoded_MD5 = int(encoded_MD5)
-        print(f"RSA_MD5_hash=<{encoded_MD5}>")
+        print(f"c: RSA_MD5_hash=<{encoded_MD5}>")
 
-        # add encoded MD5 hash to message
-        # print("4.) Adding encoded MD5 hash to message...")
-        # message = add_checksum(message, encoded_MD5)
         message = message.encode()
-
-        # Add the session key to the message
-        print("5.) Generating session key...")
-        session_key = generate_session_key()
-        # print(f"Session key: {session_key.hex()}")
 
         # encrypt session key using public key
         encoded_session_key = encrypt_session_key(
@@ -207,7 +220,6 @@ def client_mode(port):
         # print(f"Encoded session key: {encoded_session_key}")
 
         # Encrypt AES_input using AES and send it to the server
-        print("6.) Encrypting message...")
         cipher = AES.new(session_key, AES.MODE_EAX)
         ciphertext, tag = cipher.encrypt_and_digest(message)
 
@@ -216,14 +228,14 @@ def client_mode(port):
                       "session_key": encoded_session_key,
                       "nonce": cipher.nonce, "encoded_MD5": encoded_MD5}
 
-        # send dictionary to server
-        print("7.) Sending packet (encoded data + MD5 + encoded session key) server...")
-        print(AES_output)
+        print(f"c: AES_cipher={cipher}")
+        print(f"c: RSA_AES_key={encoded_session_key}")
+        print(f"c: ciphertext={ciphertext.hex()}")
         try:
             client_socket.send(str(AES_output).encode())
-            print("The message was successfully delivered")
+            print("c: The message was successfully delivered")
         except ConnectionResetError:
-            print("The message was sent again")
+            print("c: The message was sent again")
             break
 
     client_socket.close()

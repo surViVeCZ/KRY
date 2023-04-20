@@ -180,6 +180,19 @@ def client_mode(port):
     client_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     client_socket.connect((HOST, port))
     print("c: Successfully connected to server")
+    
+    #load piblic sender key, private sender key and public key reciever
+    with open('cert/sender_id_rsa', 'rb') as f:
+            private_key = RSA.import_key(f.read())
+    with open('cert/sender_id_rsa.pub', 'rb') as f:
+            public_key = RSA.import_key(f.read())
+    with open('cert/reciever_id_rsa.pub', 'rb') as f:
+            public_key_reciever = RSA.import_key(f.read())
+    #print public sender key, private sender key and public key reciever
+    print(f'c: RSA_public_key_sender=<{public_key}>')
+    print(f'c: RSA_private_key_sender=<{private_key}>')
+    print(f'c: RSA_public_key_reciever=<{public_key_reciever}>')
+
 
     while True:
         message = input("c: Enter input: ")
@@ -199,16 +212,9 @@ def client_mode(port):
         print(f"c: MD5=<{md5_hash}>")
         md5_hash = pad_hash(md5_hash)
         print(f"c: MD5_padding=<{md5_hash}>")
-        # Add the MD5 hash to the message
-
-        # encode padded hash using private key and custom RSA_encode
-        with open('cert/sender_id_rsa', 'rb') as f:
-            private_key = RSA.import_key(f.read())
-        d, n = private_key.d, private_key.n
-
+     
         md5_int = int.from_bytes(md5_hash, 'big')
-
-        # TODO zde je občas error
+        # encode padded hash using private key and custom RSA_encode
         encoded_MD5 = private_key._decrypt(md5_int)
         encoded_MD5 = int(encoded_MD5)
         print(f"c: RSA_MD5_hash=<{encoded_MD5}>")
@@ -220,8 +226,10 @@ def client_mode(port):
             session_key, 'cert/reciever_id_rsa.pub')
         # print(f"Encoded session key: {encoded_session_key}")
 
-        # Encrypt AES_input using AES and send it to the server
+        # Encrypt message + md5 hash + session key using AES
         cipher = AES.new(session_key, AES.MODE_EAX)
+        
+        #TODO: add md5 hash to message
         ciphertext, tag = cipher.encrypt_and_digest(message)
 
         # create dictionary from ciphertext, tag, and encoded session key
@@ -231,7 +239,8 @@ def client_mode(port):
 
         print(f"c: AES_cipher={cipher}")
         print(f"c: RSA_AES_key={encoded_session_key}")
-        print(f"c: ciphertext={ciphertext.hex()}")
+        #cipher text = encodeded message + hash + encoded key
+        print(f"c: ciphertext={ciphertext}")
         try:
             client_socket.send(str(AES_output).encode())
             print("c: The message was successfully delivered")

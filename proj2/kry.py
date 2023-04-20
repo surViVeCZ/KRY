@@ -16,6 +16,12 @@ from Crypto.Hash import MD5
 from Crypto.Cipher import PKCS1_OAEP
 from Crypto.Random import get_random_bytes
 
+def generate_rsa_key_pair():
+    key = RSA.generate(2048)
+    private_key = key.export_key()
+    public_key = key.publickey().export_key()
+    return private_key, public_key
+
 
 def generate_session_key():
     session_key = get_random_bytes(16)  # 16 bytes = 128 bits
@@ -61,7 +67,7 @@ def pad_hash(hash):
     current_length = len(hash)
 
     # Calculate the number of bytes needed for padding
-    padding_length = 256 - current_length
+    padding_length = 255 - current_length
 
     # Generate the padding random bytes
     padding = get_random_bytes(padding_length)
@@ -84,10 +90,6 @@ def server_mode(port):
     server_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     server_socket.bind((HOST, port))
     server_socket.listen()
-
-    # Load private key
-    with open('cert/id_rsa', 'rb') as f:
-        private_key = RSA.import_key(f.read())
 
     # waiting for client to connect
     client_socket, client_address = server_socket.accept()
@@ -115,7 +117,7 @@ def server_mode(port):
             encoded_session_key = received_data["session_key"]
             print(f's: RSA_AES_key=<{encoded_session_key}>')
             session_key = decrypt_session_key(
-                encoded_session_key, 'cert/id_rsa')
+                encoded_session_key, 'cert/reciever_id_rsa')
 
             ciphertext = received_data["ciphertext"]
             print(f's: AES_cipher=<{received_data}>')
@@ -137,7 +139,7 @@ def server_mode(port):
             print(f's: plaintext=<{decrypted_message.decode()}>')
 
             # load public key
-            with open('cert/id_rsa.pub', 'rb') as f:
+            with open('cert/sender_id_rsa.pub', 'rb') as f:
                 public_key = RSA.import_key(f.read())
             received_md5 = public_key._encrypt(received_md5)
             received_md5_bytes = received_md5.to_bytes(
@@ -200,10 +202,9 @@ def client_mode(port):
         # Add the MD5 hash to the message
 
         # encode padded hash using private key and custom RSA_encode
-        with open('cert/id_rsa', 'rb') as f:
+        with open('cert/sender_id_rsa', 'rb') as f:
             private_key = RSA.import_key(f.read())
         d, n = private_key.d, private_key.n
-        # encoded_MD5 = RSA_encode(md5_hash, private_key)
 
         md5_int = int.from_bytes(md5_hash, 'big')
 
@@ -216,7 +217,7 @@ def client_mode(port):
 
         # encrypt session key using public key
         encoded_session_key = encrypt_session_key(
-            session_key, 'cert/id_rsa.pub')
+            session_key, 'cert/reciever_id_rsa.pub')
         # print(f"Encoded session key: {encoded_session_key}")
 
         # Encrypt AES_input using AES and send it to the server
@@ -245,9 +246,13 @@ def generate_rsa_keys():
     key = RSA.generate(2048)
 
     # Write id_rsa and id_rsa.pub to files, create them if they don't exist
-    with open('cert/id_rsa', 'wb') as f:
+    with open('cert/sender_id_rsa', 'wb') as f:
         f.write(key.export_key('PEM'))
-    with open('cert/id_rsa.pub', 'wb') as f:
+    with open('cert/sender_id_rsa.pub', 'wb') as f:
+        f.write(key.publickey().export_key('PEM'))
+    with open('cert/reciever_id_rsa', 'wb') as f:
+        f.write(key.export_key('PEM'))
+    with open('cert/reciever_id_rsa.pub', 'wb') as f:
         f.write(key.publickey().export_key('PEM'))
 
 
@@ -260,15 +265,13 @@ if __name__ == '__main__':
         print("Wrong usage of arguments: python3 kry.py TYPE=s/c PORT=number")
         sys.exit()
 
-    try:
-        port = int(sys.argv[2])
-    except ValueError:
-        print("Invalid port number")
-        exit()
+    mode = sys.argv[1].split('=')[1]  # s = server, c = client
+    port = int(sys.argv[2].split('=')[1])
 
-    if sys.argv[1] == 's':
+    if mode == 's':
         server_mode(port)
-    elif sys.argv[1] == 'c':
+
+    elif mode == 'c':
         client_mode(port)
     else:
         print("Wrong usage of arguments: python3 kry.py TYPE=s/c PORT=number")

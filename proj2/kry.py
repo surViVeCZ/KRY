@@ -58,23 +58,21 @@ def decrypt_session_key(encoded_session_key: int, private_key_path):
 
 
 def add_checksum(message: bytes, hash: typing.List[int]):
-    message = message + str(hash).encode()
+    hash = hash.to_bytes(256, byteorder='big')
+    message = message + hash
+    return message
+
+def remove_checksum(message: bytes):
+    # Remove the checksum bytes from the messag
+    message = message[:-256]
     return message
 
 
 def pad_hash(hash):
-    # Get the current length of the hash
     current_length = len(hash)
-
-    # Calculate the number of bytes needed for padding
     padding_length = 255 - current_length
-
-    # Generate the padding random bytes
     padding = get_random_bytes(padding_length)
-
-    # Append the padding bytes to the hash
     padded_hash = hash + padding
-
     return padded_hash
 
 
@@ -131,29 +129,32 @@ def server_mode(port):
             nonce = received_data["nonce"]
             cipher = AES.new(session_key, AES.MODE_EAX, nonce=nonce)
             print(f's: AES_cipher {cipher}')
-            decrypted_message = cipher.decrypt(ciphertext)
 
-            # Verify the MD5 hash of the message
-            received_md5 = received_data["encoded_MD5"]
-
-            print(f's: plaintext=<{decrypted_message.decode()}>')
 
             # load public key
             with open('cert/sender_id_rsa.pub', 'rb') as f:
                 public_key = RSA.import_key(f.read())
+        
+            # received_md5 = RSA_decode(received_md5, private_key)
+            
+            decrypted_message = cipher.decrypt(ciphertext)
+            
+            received_md5 = int.from_bytes(decrypted_message[-256:], byteorder='big')
             received_md5 = public_key._encrypt(received_md5)
-            received_md5_bytes = received_md5.to_bytes(
-                (received_md5.bit_length() + 7) // 8, 'big')
+            received_md5_bytes = received_md5.to_bytes((received_md5.bit_length() + 7) // 8, 'big')
+    
             # first 16 bytes are the hash
             recv_md5_cut = received_md5_bytes[:16]
-            # received_md5 = RSA_decode(received_md5, private_key)
+            message = remove_checksum(decrypted_message)
+            
+            print(f's: plaintext=<{message.decode()}>')
 
             print(f's: MD5=<{received_md5}>')
 
-            md5_hash = hashlib.md5(decrypted_message).digest()
+            md5_hash = hashlib.md5(message).digest()
 
-            print(f'Expected MD5: {recv_md5_cut}')
-            print(f'Received MD5: {md5_hash}\n')
+            print(f'Extracted MD5: {recv_md5_cut}')
+            print(f'Expected MD5: {md5_hash}\n')
 
             if recv_md5_cut != md5_hash:
                 print("The integrity of the report has been compromised.")
@@ -220,6 +221,8 @@ def client_mode(port):
         print(f"c: RSA_MD5_hash=<{encoded_MD5}>")
 
         message = message.encode()
+        message = add_checksum(message, encoded_MD5)
+        
 
         # encrypt session key using public key
         encoded_session_key = encrypt_session_key(
@@ -235,7 +238,7 @@ def client_mode(port):
         # create dictionary from ciphertext, tag, and encoded session key
         AES_output = {"ciphertext": ciphertext, "tag": tag,
                       "session_key": encoded_session_key,
-                      "nonce": cipher.nonce, "encoded_MD5": encoded_MD5}
+                      "nonce": cipher.nonce}
 
         print(f"c: AES_cipher={cipher}")
         print(f"c: RSA_AES_key={encoded_session_key}")

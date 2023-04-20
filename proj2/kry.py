@@ -217,8 +217,8 @@ def client_mode(port):
         md5_int = int.from_bytes(md5_hash, 'big')
         # encode padded hash using private key and custom RSA_encode
         encoded_MD5 = private_key._decrypt(md5_int)
+        print(f"c: RSA_MD5_hash=<{encoded_MD5.to_bytes(256, 'big')}>")
         encoded_MD5 = int(encoded_MD5)
-        print(f"c: RSA_MD5_hash=<{encoded_MD5}>")
 
         message = message.encode()
         message = add_checksum(message, encoded_MD5)
@@ -241,7 +241,7 @@ def client_mode(port):
                       "nonce": cipher.nonce}
 
         print(f"c: AES_cipher={cipher}")
-        print(f"c: RSA_AES_key={encoded_session_key}")
+        print(f"c: RSA_AES_key={encoded_session_key.to_bytes(256, 'big')}")
         #cipher text = encodeded message + hash + encoded key
         print(f"c: ciphertext={ciphertext}")
         try:

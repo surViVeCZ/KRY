@@ -110,10 +110,24 @@ def server_mode(port):
             if data == "":
                 break
             received_data = eval(data)
+            
+             #load piblic sender key, private sender key and public key reciever
+            with open('cert/reciever_id_rsa.pub', 'rb') as f:
+                    public_key_reciever = RSA.import_key(f.read())
+            with open('cert/reciever_id_rsa', 'rb') as f:
+                    private_key_reciever = RSA.import_key(f.read())
+            with open('cert/sender_id_rsa.pub', 'rb') as f:
+                    public_key = RSA.import_key(f.read())
+            #print public sender key, private sender key and public key reciever
+            print(f'c: RSA_public_key_receiver=<{public_key_reciever}>')
+            print(f'c: RSA_private_key_receiver=<{private_key_reciever}>')
+            print(f'c: RSA_public_key_sender=<{public_key}>')
 
             # Decrypt session key using private key
             encoded_session_key = received_data["session_key"]
-            print(f's: RSA_AES_key=<{encoded_session_key}>')
+            #endoded session key to bytes
+            encoded_session_key_bytes = encoded_session_key.to_bytes((encoded_session_key.bit_length() + 7) // 8, 'big')
+            print(f's: RSA_AES_key=<{encoded_session_key_bytes}>')
             session_key = decrypt_session_key(
                 encoded_session_key, 'cert/reciever_id_rsa')
 
@@ -129,14 +143,7 @@ def server_mode(port):
             nonce = received_data["nonce"]
             cipher = AES.new(session_key, AES.MODE_EAX, nonce=nonce)
             print(f's: AES_cipher {cipher}')
-
-
-            # load public key
-            with open('cert/sender_id_rsa.pub', 'rb') as f:
-                public_key = RSA.import_key(f.read())
         
-            # received_md5 = RSA_decode(received_md5, private_key)
-            
             decrypted_message = cipher.decrypt(ciphertext)
             
             received_md5 = int.from_bytes(decrypted_message[-256:], byteorder='big')
@@ -149,7 +156,9 @@ def server_mode(port):
             
             print(f's: plaintext=<{message.decode()}>')
 
-            print(f's: MD5=<{received_md5}>')
+            #MD5 to bytes
+            received_md5_bytes = received_md5.to_bytes((received_md5.bit_length() + 7) // 8, 'big')
+            print(f's: MD5=<{received_md5_bytes}>')
 
             md5_hash = hashlib.md5(message).digest()
 

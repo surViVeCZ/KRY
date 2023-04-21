@@ -1,4 +1,4 @@
-# Date: 12.04.2023
+# Date: 21.04.2023
 # Description: KRY project 2 - Hybrid encryption of client-server communication
 # Author: Bc. Petr Pouč
 # Login: xpoucp01
@@ -15,13 +15,6 @@ import hashlib
 from Crypto.Hash import MD5
 from Crypto.Cipher import PKCS1_OAEP
 from Crypto.Random import get_random_bytes
-
-def generate_rsa_key_pair():
-    key = RSA.generate(2048)
-    private_key = key.export_key()
-    public_key = key.publickey().export_key()
-    return private_key, public_key
-
 
 def generate_session_key():
     session_key = get_random_bytes(16)  # 16 bytes = 128 bits
@@ -101,17 +94,12 @@ def server_mode(port):
             packet = b''
             while True:
                 new_recv = client_socket.recv(4096)
-                print(f"s: Received {len(new_recv)} bytes from client")
-                
                 if not new_recv: # client disconnected
                     break
                 
                 recv_buf += new_recv
-                #extract first 4 bytes as length of message
-                print(f"Now have {len(recv_buf)} bytes in buffer")
                 
                 length = int.from_bytes(recv_buf[:4], byteorder='big')
-                print(f"Message length is {length}")
                 if len(recv_buf) < length + 4:
                     continue # not enough data
                 
@@ -129,17 +117,16 @@ def server_mode(port):
                 break
             received_data = eval(data)
             
-             #load piblic sender key, private sender key and public key reciever
-            with open('cert/reciever_id_rsa.pub', 'rb') as f:
-                    public_key_reciever = RSA.import_key(f.read())
-            with open('cert/reciever_id_rsa', 'rb') as f:
-                    private_key_reciever = RSA.import_key(f.read())
+            with open('cert/receiver_id_rsa.pub', 'rb') as f:
+                    public_key_receiver = RSA.import_key(f.read())
+            with open('cert/receiver_id_rsa', 'rb') as f:
+                    private_key_receiver = RSA.import_key(f.read())
             with open('cert/sender_id_rsa.pub', 'rb') as f:
                     public_key = RSA.import_key(f.read())
-            #print public sender key, private sender key and public key reciever
-            print(f'c: RSA_public_key_receiver=<{public_key_reciever}>')
-            print(f'c: RSA_private_key_receiver=<{private_key_reciever}>')
-            print(f'c: RSA_public_key_sender=<{public_key}>')
+                    
+            print(f's: RSA_public_key_receiver=<{public_key_receiver}>')
+            print(f's: RSA_private_key_receiver=<{private_key_receiver}>')
+            print(f's: RSA_public_key_sender=<{public_key}>')
 
             # Decrypt session key using private key
             encoded_session_key = received_data["session_key"]
@@ -147,7 +134,7 @@ def server_mode(port):
             encoded_session_key_bytes = encoded_session_key.to_bytes((encoded_session_key.bit_length() + 7) // 8, 'big')
             print(f's: RSA_AES_key=<{encoded_session_key_bytes}>')
             session_key = decrypt_session_key(
-                encoded_session_key, 'cert/reciever_id_rsa')
+                encoded_session_key, 'cert/receiver_id_rsa')
 
             ciphertext = received_data["ciphertext"]
             print(f's: AES_cipher=<{received_data}>')
@@ -164,11 +151,12 @@ def server_mode(port):
         
             decrypted_message = cipher.decrypt(ciphertext)
             
+            #extract and decrypt MD5 hash
             received_md5 = int.from_bytes(decrypted_message[-256:], byteorder='big')
             received_md5 = public_key._encrypt(received_md5)
             received_md5_bytes = received_md5.to_bytes((received_md5.bit_length() + 7) // 8, 'big')
     
-            # first 16 bytes are the hash
+            #remove MD5 hash from message, only first 16 bytes are hash
             recv_md5_cut = received_md5_bytes[:16]
             message = remove_checksum(decrypted_message)
             
@@ -186,13 +174,12 @@ def server_mode(port):
             if recv_md5_cut != md5_hash:
                 print("The integrity of the report has been compromised.")
                 # send NACK
-                client_socket.send(b'NACK')
+                client_socket.sendall("NACK".encode())
                 break
-
-            # If verification is successful, print the message
+            
             print("s: The integrity of the message has not been compromised\n")
             # send ACK
-            client_socket.send(b'ACK')
+            client_socket.sendall("ACK".encode())
 
         except ConnectionResetError:
             print(f"s: Client disconnected...")
@@ -209,17 +196,17 @@ def client_mode(port):
     client_socket.connect((HOST, port))
     print("c: Successfully connected to server")
     
-    #load piblic sender key, private sender key and public key reciever
+    #load piblic sender key, private sender key and public key receiver
     with open('cert/sender_id_rsa', 'rb') as f:
             private_key = RSA.import_key(f.read())
     with open('cert/sender_id_rsa.pub', 'rb') as f:
             public_key = RSA.import_key(f.read())
-    with open('cert/reciever_id_rsa.pub', 'rb') as f:
-            public_key_reciever = RSA.import_key(f.read())
-    #print public sender key, private sender key and public key reciever
+    with open('cert/receiver_id_rsa.pub', 'rb') as f:
+            public_key_receiver = RSA.import_key(f.read())
+    #print public sender key, private sender key and public key receiver
     print(f'c: RSA_public_key_sender=<{public_key}>')
     print(f'c: RSA_private_key_sender=<{private_key}>')
-    print(f'c: RSA_public_key_reciever=<{public_key_reciever}>')
+    print(f'c: RSA_public_key_receiver=<{public_key_receiver}>')
 
 
     while True:
@@ -250,20 +237,16 @@ def client_mode(port):
         message = message.encode()
         #encode message len to 4 bytes
         message = add_checksum(message, encoded_MD5)
-        
 
         # encrypt session key using public key
         encoded_session_key = encrypt_session_key(
-            session_key, 'cert/reciever_id_rsa.pub')
+            session_key, 'cert/receiver_id_rsa.pub')
         # print(f"Encoded session key: {encoded_session_key}")
 
         # Encrypt message + md5 hash + session key using AES
         cipher = AES.new(session_key, AES.MODE_EAX)
-        
-        #TODO: add md5 hash to message
         ciphertext, tag = cipher.encrypt_and_digest(message)
         
-       
        
 
         # create dictionary from ciphertext, tag, and encoded session key
@@ -281,7 +264,13 @@ def client_mode(port):
             final_packet = str(AES_output).encode()
             packet_len = len(final_packet).to_bytes(4, byteorder='big')
             client_socket.send(packet_len + final_packet)
-            print("c: The message was successfully delivered")
+            
+            ack = client_socket.recv(4096).decode()
+            if ack == "NACK":
+                print("c: The message was sent again")
+                client_socket.send(packet_len + final_packet)
+            elif ack == "ACK":
+                print("c: The message was successfully delivered")
         except ConnectionResetError:
             print("c: The message was sent again")
             break
@@ -297,9 +286,9 @@ def generate_rsa_keys():
         f.write(key.export_key('PEM'))
     with open('cert/sender_id_rsa.pub', 'wb') as f:
         f.write(key.publickey().export_key('PEM'))
-    with open('cert/reciever_id_rsa', 'wb') as f:
+    with open('cert/receiver_id_rsa', 'wb') as f:
         f.write(key.export_key('PEM'))
-    with open('cert/reciever_id_rsa.pub', 'wb') as f:
+    with open('cert/receiver_id_rsa.pub', 'wb') as f:
         f.write(key.publickey().export_key('PEM'))
 
 if __name__ == '__main__':
@@ -324,4 +313,3 @@ if __name__ == '__main__':
     else:
         print("Wrong usage of arguments: python3 kry.py TYPE=s/c PORT=number")
         sys.exit()
- 

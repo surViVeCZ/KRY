@@ -195,7 +195,7 @@ def server_mode(port):
             client_socket.send(b'ACK')
 
         except ConnectionResetError:
-            print(f"s: Client {client_address} disconnected unexpectedly")
+            print(f"s: Client disconnected...")
             break
 
     print("Closing connection...")
@@ -302,7 +302,6 @@ def generate_rsa_keys():
     with open('cert/reciever_id_rsa.pub', 'wb') as f:
         f.write(key.publickey().export_key('PEM'))
 
-
 if __name__ == '__main__':
     generate_rsa_keys()
 
@@ -312,14 +311,17 @@ if __name__ == '__main__':
         print("Wrong usage of arguments: python3 kry.py TYPE=s/c PORT=number")
         sys.exit()
 
-    mode = sys.argv[1].split('=')[1]  # s = server, c = client
-    port = int(sys.argv[2].split('=')[1])
+    try:
+        port = int(sys.argv[2])
+    except ValueError:
+        print("Invalid port number")
+        exit()
 
-    if mode == 's':
+    if sys.argv[1] == 's':
         server_mode(port)
-
-    elif mode == 'c':
+    elif sys.argv[1] == 'c':
         client_mode(port)
     else:
         print("Wrong usage of arguments: python3 kry.py TYPE=s/c PORT=number")
         sys.exit()
+ 

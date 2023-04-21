@@ -87,7 +87,7 @@ def server_mode(port):
     HOST = '127.0.0.1'
     server_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     server_socket.bind((HOST, port))
-    server_socket.listen()
+    server_socket.listen(1)
 
     # waiting for client to connect
     client_socket, client_address = server_socket.accept()
@@ -95,15 +95,33 @@ def server_mode(port):
     # client connected
     while True:
         print("s: \"Client has joined\"")
+        recv_buf = b''
         try:
             # receive data from client in while loop, until it reaches end
-            data = b''
+            packet = b''
             while True:
-                packet = client_socket.recv(4096)
-                if not packet:
+                new_recv = client_socket.recv(4096)
+                print(f"s: Received {len(new_recv)} bytes from client")
+                
+                if not new_recv: # client disconnected
                     break
-                data += packet
-            data = data.decode()
+                
+                recv_buf += new_recv
+                #extract first 4 bytes as length of message
+                print(f"Now have {len(recv_buf)} bytes in buffer")
+                
+                length = int.from_bytes(recv_buf[:4], byteorder='big')
+                print(f"Message length is {length}")
+                if len(recv_buf) < length + 4:
+                    continue # not enough data
+                
+                # extract message
+                packet = recv_buf[4:length + 4]
+                # remove message from buffer
+                recv_buf = recv_buf[length + 4:]
+                break
+            
+            data = packet.decode()
 
             # Convert received data to dictionary
             # check for empty string
@@ -168,13 +186,13 @@ def server_mode(port):
             if recv_md5_cut != md5_hash:
                 print("The integrity of the report has been compromised.")
                 # send NACK
-                client_socket.sendall(b'NACK')
+                client_socket.send(b'NACK')
                 break
 
             # If verification is successful, print the message
             print("s: The integrity of the message has not been compromised")
             # send ACK
-            client_socket.sendall(b'ACK')
+            client_socket.send(b'ACK')
 
         except ConnectionResetError:
             print(f"s: Client {client_address} disconnected unexpectedly")
@@ -230,6 +248,7 @@ def client_mode(port):
         encoded_MD5 = int(encoded_MD5)
 
         message = message.encode()
+        #encode message len to 4 bytes
         message = add_checksum(message, encoded_MD5)
         
 
@@ -243,18 +262,25 @@ def client_mode(port):
         
         #TODO: add md5 hash to message
         ciphertext, tag = cipher.encrypt_and_digest(message)
+        
+       
+       
 
         # create dictionary from ciphertext, tag, and encoded session key
         AES_output = {"ciphertext": ciphertext, "tag": tag,
                       "session_key": encoded_session_key,
                       "nonce": cipher.nonce}
+        
+        
 
         print(f"c: AES_cipher={cipher}")
         print(f"c: RSA_AES_key={encoded_session_key.to_bytes(256, 'big')}")
         #cipher text = encodeded message + hash + encoded key
         print(f"c: ciphertext={ciphertext}")
         try:
-            client_socket.send(str(AES_output).encode())
+            final_packet = str(AES_output).encode()
+            packet_len = len(final_packet).to_bytes(4, byteorder='big')
+            client_socket.send(packet_len + final_packet)
             print("c: The message was successfully delivered")
         except ConnectionResetError:
             print("c: The message was sent again")

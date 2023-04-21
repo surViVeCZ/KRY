@@ -181,7 +181,7 @@ def server_mode(port):
             md5_hash = hashlib.md5(message).digest()
 
             print(f'Extracted MD5: {recv_md5_cut}')
-            print(f'Expected MD5: {md5_hash}\n')
+            print(f'Expected MD5: {md5_hash}')
 
             if recv_md5_cut != md5_hash:
                 print("The integrity of the report has been compromised.")
@@ -190,7 +190,7 @@ def server_mode(port):
                 break
 
             # If verification is successful, print the message
-            print("s: The integrity of the message has not been compromised")
+            print("s: The integrity of the message has not been compromised\n")
             # send ACK
             client_socket.send(b'ACK')
 
